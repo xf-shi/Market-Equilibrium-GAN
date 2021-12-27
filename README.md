@@ -19,7 +19,7 @@ The general variables and the market parameters and their corresponding values i
 | `TIME` | 1 | trading horizon, T |
 | `TIME_STEP` | 252 |  time discretization, N |
 | `DT ` | 1/252 | <img src="https://latex.codecogs.com/gif.latex?\Delta%20t={T}/{N}" />  |
-| `GAMMA` | <img src="https://latex.codecogs.com/gif.latex?\gamma_1=1" />, <img src="https://latex.codecogs.com/gif.latex?\gamma_1=1" /> | risk aversion, <img src="https://latex.codecogs.com/gif.latex?\gamma_2=1" />, <img src="https://latex.codecogs.com/gif.latex?\gamma_3=2" /> |
+| `GAMMA` | <img src="https://latex.codecogs.com/gif.latex?\gamma_1=1" />, <img src="https://latex.codecogs.com/gif.latex?\gamma_2=1" />, <img src="https://latex.codecogs.com/gif.latex?\gamma_3=2" /> | risk aversion, <img src="https://latex.codecogs.com/gif.latex?\gamma" /> |
 | `XI` | <img src="https://latex.codecogs.com/gif.latex?{\xi}_1=1" />, <img src="https://latex.codecogs.com/gif.latex?{\xi}_2=2" />, <img src="https://latex.codecogs.com/gif.latex?{\xi}_3=-3" /> | endowment volatility parameter, <img src="https://latex.codecogs.com/gif.latex?{\xi}" /> |
 | `PHI_INITIAL` | - | initial holding,  <img src="https://latex.codecogs.com/gif.latex?\varphi_{0-}" /> |
 | `ALPHA` | 1 | market volatility,  <img src="https://latex.codecogs.com/gif.latex?\sigma " /> |
