@@ -10,7 +10,6 @@ The special case with following assumptions is considered:
 * the endowment volatility is in the form of <img src="https://latex.codecogs.com/gif.latex?\xi_t={\xi}W_t" /> where <img src="https://latex.codecogs.com/gif.latex?{\xi}" /> is constant for each trading agent. Again, different trading agents might have different endowment volatilities; 
 * the frictionless strategy satisfies that   <img src="https://latex.codecogs.com/gif.latex?\bar{b}_t=0" /> and <img src="https://latex.codecogs.com/gif.latex?\bar{a}_t=-{\xi}/{\sigma}" />
 
-<br/><br/>
 The general variables and the market parameters and their corresponding values in the code are summarized below:
 | Variable | Value | Meaning |
 | --- | --- | --- |
