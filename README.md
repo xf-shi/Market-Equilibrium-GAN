@@ -5,7 +5,7 @@ This repo contains the framework for obtaining optimal trading strategies among 
 
 The special case with following assumptions is considered:
 
-* the dynamic of the market satisfies that return <img src="https://latex.codecogs.com/gif.latex?\mu_t" /> and voalatility <img src="https://latex.codecogs.com/gif.latex?\sigma_t" /> are unknown;
+* the dynamic of the market satisfies that return <img src="https://latex.codecogs.com/gif.latex?\mu_t" /> and volatility <img src="https://latex.codecogs.com/gif.latex?\sigma_t" /> are unknown;
 * the cost parameter <img src="https://latex.codecogs.com/gif.latex?\lambda" /> for each trading agent is constant, but different agents might have different <img src="https://latex.codecogs.com/gif.latex?\lambda" />;
 * the endowment volatility is in the form of <img src="https://latex.codecogs.com/gif.latex?\xi_t={\xi}W_t" /> where <img src="https://latex.codecogs.com/gif.latex?{\xi}" /> is constant for each trading agent. Again, different trading agents might have different endowment volatilities; 
 * the frictionless strategy satisfies that   <img src="https://latex.codecogs.com/gif.latex?\bar{b}_t=0" /> and <img src="https://latex.codecogs.com/gif.latex?\bar{a}_t=-{\xi}/{\sigma}" />
