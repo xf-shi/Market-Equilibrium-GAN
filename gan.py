@@ -7,6 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1Ebm-51a0kHnpfvdnQ4-SVyEgejA-lIdl
 """
 
+import json
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -447,6 +448,8 @@ def moderator(gen_hidden_lst, dis_hidden_lst, gen_lr=[1e-3], gen_epoch=[100], ge
     else:
         discriminator_func = torch.load(f"Models/Discriminator__{ts}.pt")
     
+    curr_ts_lst = []
+    
     ## Training
     for round in range(total_rounds):
         print("Round #" + str(round + 1) + ":")
@@ -528,8 +531,9 @@ def moderator(gen_hidden_lst, dis_hidden_lst, gen_lr=[1e-3], gen_epoch=[100], ge
         if round < total_rounds - 1:
             torch.save(generator_func, "Models/Generator_" + suffix + ".pt")
             torch.save(discriminator_func, "Models/Discriminator_" + suffix + ".pt")
+            curr_ts_lst.append(suffix.replace("_", ""))
     
-    return generator_func, discriminator_func
+    return generator_func, discriminator_func, ts, curr_ts_lst
 
 def discriminator_func_truth(x):
     ret = torch.ones(N_SAMPLE).reshape((N_SAMPLE, 1))
@@ -624,11 +628,25 @@ def visualize_comparision(psi_SNT, mu_st, sigma_st, stock_st, visualize_obs, suf
     plt.close()
     #plt.show()
 
-generator_func, discriminator_func = moderator(gen_hidden_lst = [50, 50, 50], dis_hidden_lst = [50, 50, 50], gen_lr=[1e-2, 1e-2, 1e-1, 1e-2, 1e-2, 1e-1], gen_epoch=[1000, 500, 1000, 5000, 10000], gen_decay=0.1, gen_scheduler_step=5000, dis_lr=[1e-2, 1e-2, 1e-1, 1e-2], dis_epoch=[5000, 500, 2000, 10000, 20000], dis_loss=[1, 1, 1, 1], dis_decay=0.1, dis_scheduler_step=10000, total_rounds=1, visualize_obs=0, train_gen=False, train_dis=True, use_pretrained_gen=True, use_pretrained_dis=True, last_round_dis=True)
+def write_logs(ts_lst, train_args):
+    with open("Logs.tsv", "a") as f:
+        for i in range(1, len(ts_lst)):
+            line = f"{ts_lst[i - 1]}\t{ts_lst[i]}\t{json.dumps(train_args)}\n"
+            f.write(line)
+    
+train_args = {"gen_hidden_lst": [50, 50, 50], "dis_hidden_lst": [50, 50, 50], "gen_lr": [1e-2, 1e-2, 1e-1, 1e-2, 1e-2, 1e-1], "gen_epoch": [100, 500, 1000, 5000, 10000], "gen_decay": 0.1, "gen_scheduler_step": 5000, "dis_lr": [1e-3, 1e-2, 1e-1, 1e-2], "dis_epoch": [10000, 500, 2000, 10000, 20000], "dis_loss": [1, 1, 1, 1], "dis_decay": 0.1, "dis_scheduler_step": 10000, "total_rounds": 1, "visualize_obs": 0, "train_gen": True, "train_dis": False, "use_pretrained_gen": True, "use_pretrained_dis": True, "last_round_dis": False}
+
+generator_func, discriminator_func, prev_ts, curr_ts_lst = moderator(**train_args)
+
+#generator_func, discriminator_func, prev_ts, curr_ts_lst = moderator(gen_hidden_lst = [50, 50, 50], dis_hidden_lst = [50, 50, 50], gen_lr=[1e-2, 1e-2, 1e-1, 1e-2, 1e-2, 1e-1], gen_epoch=[1000, 500, 1000, 5000, 10000], gen_decay=0.1, gen_scheduler_step=5000, dis_lr=[1e-3, 1e-2, 1e-1, 1e-2], dis_epoch=[10000, 500, 2000, 10000, 20000], dis_loss=[1, 1, 1, 1], dis_decay=0.1, dis_scheduler_step=10000, total_rounds=1, visualize_obs=0, train_gen=True, train_dis=False, use_pretrained_gen=True, use_pretrained_dis=True, last_round_dis=False)
 
 suffix = "_" + datetime.now(tz=pytz.timezone("America/New_York")).strftime("%Y-%m-%d-%H-%M")
+curr_ts_lst.append(suffix.replace("_", ""))
 torch.save(generator_func, "Models/Generator_" + suffix + ".pt")
 torch.save(discriminator_func, "Models/Discriminator_" + suffix + ".pt")
+
+ts_lst = [prev_ts] + curr_ts_lst
+write_logs(ts_lst, train_args)
 # torch.save(generator_func, "Models/Generator.pt")
 # torch.save(discriminator_func, "Models/Discriminator.pt")
 
