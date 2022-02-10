@@ -25,3 +25,4 @@ The general variables and the market parameters and their corresponding values i
 | `MU_BAR` | - | market return,  <img src="https://latex.codecogs.com/gif.latex?\mu " /> |
 | `LAM` | 0.1 | trading cost parameter, <img src="https://latex.codecogs.com/gif.latex?\lambda " /> |
 | `test_samples` | 300 | number of test sample path, batch_size |
+| `num_agents` | 3 | number of agents |
