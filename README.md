@@ -21,7 +21,8 @@ The general variables and the market parameters and their corresponding values i
 | `GAMMA` | <img src="https://latex.codecogs.com/gif.latex?\gamma_1=1" />, <img src="https://latex.codecogs.com/gif.latex?\gamma_2=1" />, <img src="https://latex.codecogs.com/gif.latex?\gamma_3=2" /> | risk aversion, <img src="https://latex.codecogs.com/gif.latex?\gamma" /> |
 | `XI` | <img src="https://latex.codecogs.com/gif.latex?{\xi}_1=1" />, <img src="https://latex.codecogs.com/gif.latex?{\xi}_2=2" />, <img src="https://latex.codecogs.com/gif.latex?{\xi}_3=-3" /> | endowment volatility parameter, <img src="https://latex.codecogs.com/gif.latex?{\xi}" /> |
 | `PHI_INITIAL` | - | initial holding,  <img src="https://latex.codecogs.com/gif.latex?\varphi_{0-}" /> |
-| `ALPHA` | 1 | market volatility,  <img src="https://latex.codecogs.com/gif.latex?\sigma " /> |
+| `ALPHA` | 1 | market volatility,  <img src="https://latex.codecogs.com/gif.latex?{\sigma} " /> |
 | `MU_BAR` | - | market return,  <img src="https://latex.codecogs.com/gif.latex?\mu " /> |
 | `LAM` | 0.1 | trading cost parameter, <img src="https://latex.codecogs.com/gif.latex?\lambda " /> |
 | `test_samples` | 300 | number of test sample path, batch_size |
+| `num_agents` | 3 | number of agents |
