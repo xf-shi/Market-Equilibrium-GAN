@@ -32,8 +32,10 @@ else:
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
 
-T = 252
 TR = 1 #20
+TIME_LST_INT = np.linspace(0, TR, 100 + 1) / 100
+TIME_LST = TIME_LST_INT[1:] - TIME_LST_INT[:-1]
+T = len(TIME_LST)
 N_SAMPLE = 300 #128
 ALPHA = 1 #1 #
 BETA = 0.5
@@ -68,7 +70,10 @@ GAMMA_MAX_NP = GAMMA_MAX.numpy()
 ###
 
 ## Setup Brownian Motion
-dW_ST = torch.normal(0, np.sqrt(TR/T), size=(N_SAMPLE, T))
+#dW_ST = torch.normal(0, np.sqrt(TR/T), size=(N_SAMPLE, T))
+dW_ST = torch.zeros((N_SAMPLE, T))
+for t in range(T):
+    dW_ST[:, t] = torch.normal(0, np.sqrt(TIME_LST[t]), size = (N_SAMPLE,))
 W_ST = torch.cumsum(torch.cat((torch.zeros((N_SAMPLE, 1)), dW_ST), dim=1), dim=1)
 
 def InverseRiccati(t, R, LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA_LIST_NP, GAMMA_MAX_NP=GAMMA_MAX_NP, ALPHA=ALPHA, N=N, XI_LIST_NP=XI_LIST_NP):
@@ -98,7 +103,7 @@ def InverseRiccati(t, R, LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA
     return dR
     
 R_0 = np.zeros(N * (N + 1))
-time = np.linspace(0, TR, T)
+time = TIME_LST_INT[:-1] #np.linspace(0, TR, T + 1)[:-1]
 res = solve_ivp(lambda t,R:InverseRiccati(t,R,LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA_LIST_NP, GAMMA_MAX_NP=GAMMA_MAX_NP, ALPHA=ALPHA, N=N, XI_LIST_NP=XI_LIST_NP) , t_span=[0, TR], y0=R_0, t_eval=time)
 
 RH = torch.tensor(res.y[:N])
@@ -124,7 +129,7 @@ def truth_psi(W_st_, cuda=False):
     for t in range(T):
         psi_dot_snt[:,:-1,t] = -1 / LAM * ((psi_snt[:,:-1,t] - ones @ (GAMMA_BAR / GAMMA_LIST[:-1] * S).reshape((1, N - 1))) @ F_exact[:,t].reshape((N, N))[:-1,:-1].T + W_st_[:,t].reshape((N_SAMPLE, 1)) @ H_exact[:-1,t].reshape((1, N - 1)))
         psi_dot_snt[:,-1,t] = -torch.sum(psi_dot_snt[:,:-1,t], axis=1)
-        psi_snt[:,:,t+1] = psi_snt[:,:,t] + psi_dot_snt[:,:,t] * TR / T
+        psi_snt[:,:,t+1] = psi_snt[:,:,t] + psi_dot_snt[:,:,t] * TIME_LST[t] #* TR / T
     return psi_snt
 
 def get_mu_from_sigma(SIGMA_T, psi_snt, W_st_, is_T=False, cuda=False):
@@ -240,7 +245,10 @@ def generator(discriminator_func, gen_hidden_lst, gen_lr=1e-3, gen_epoch=100, ge
         mu_st = torch.zeros((N_SAMPLE, T))
         sigma_st = torch.zeros((N_SAMPLE, T))
         xi_snt = torch.zeros((N_SAMPLE, N, T))
-        dW_ = torch.normal(0, np.sqrt(TR/T), size=(N_SAMPLE, T))
+        #dW_ = torch.normal(0, np.sqrt(TR/T), size=(N_SAMPLE, T))
+        dW_ = torch.zeros((N_SAMPLE, T))
+        for t in range(T):
+            dW_[:, t] = torch.normal(0, np.sqrt(TIME_LST[t]), size = (N_SAMPLE,))
         W_ = torch.cumsum(torch.cat((torch.zeros((N_SAMPLE, 1)), dW_), dim=1), dim=1)
         stock_st = torch.zeros((N_SAMPLE, T + 1))
         gamma_sn = torch.ones((N_SAMPLE, 1)) @ GAMMA_LIST.cpu().reshape((1, N))
@@ -284,7 +292,7 @@ def generator(discriminator_func, gen_hidden_lst, gen_lr=1e-3, gen_epoch=100, ge
 #                 print(sigma_s, mu_s[0])
             sigma_st[:,t] = sigma_s
             mu_st[:,t] = mu_s.reshape((-1,)) #0.5#
-            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * TR / T + sigma_st[:,t] * dW_[:,t]
+            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * TIME_LST[t] + sigma_st[:,t] * dW_[:,t] #* TR / T + sigma_st[:,t] * dW_[:,t]
 
             for n in range(N - 1):
                 if train_on_gpu:
@@ -292,7 +300,7 @@ def generator(discriminator_func, gen_hidden_lst, gen_lr=1e-3, gen_epoch=100, ge
                 else:
                     x = torch.cat((psi_SNT[:,n,t].reshape((N_SAMPLE, 1)), W_[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
                 psi_dot_SNT[:,n,t+1] = model_list[n * T + t](x).reshape((-1,))
-                psi_SNT[:,n,t+1] = psi_dot_SNT[:,n,t+1] / T * TR + psi_SNT[:,n,t]
+                psi_SNT[:,n,t+1] = psi_dot_SNT[:,n,t+1] * TIME_LST[t] + psi_SNT[:,n,t] #/ T * TR + psi_SNT[:,n,t]
             psi_dot_SNT[:,-1,t+1] = -torch.sum(psi_dot_SNT[:,:-1,t+1], axis=1)
             psi_SNT[:,-1,t+1] = S - torch.sum(psi_SNT[:,:-1,t+1], axis=1)
                 
@@ -319,7 +327,9 @@ def generator(discriminator_func, gen_hidden_lst, gen_lr=1e-3, gen_epoch=100, ge
     psi_snt_truth = truth_psi(W_, cuda=train_on_gpu)
     mu_st_truth = get_mu_from_sigma(SIGMA_T, psi_snt_truth, W_, is_T=True, cuda=train_on_gpu)
     PSI_DOT_SNT_TRUTH = torch.zeros((N_SAMPLE, N, T + 1))
-    PSI_DOT_SNT_TRUTH[:,:,1:] = (psi_snt_truth[:,:,1:] - psi_snt_truth[:,:,:-1]) * T / TR
+    PSI_DOT_SNT_TRUTH[:,:,1:] = (psi_snt_truth[:,:,1:] - psi_snt_truth[:,:,:-1]) #* T / TR ### TODO: MODIFY IT!!! ###
+    for t in range(T):
+        PSI_DOT_SNT_TRUTH[:,:,t + 1] *= TIME_LST[t]
     if train_on_gpu:
         psi_snt_truth = psi_snt_truth.to(device="cuda")
         PSI_DOT_SNT_TRUTH = PSI_DOT_SNT_TRUTH.to(device="cuda")
@@ -347,7 +357,10 @@ def discriminator(generator_func, dis_hidden_lst, dis_lr=1e-3, dis_epoch=100, di
         mu_st = torch.zeros((N_SAMPLE, T))
         sigma_st = torch.zeros((N_SAMPLE, T))
         xi_snt = torch.zeros((N_SAMPLE, N, T))
-        dW_ = torch.normal(0, np.sqrt(TR/T), size=(N_SAMPLE, T))
+#        dW_ = torch.normal(0, np.sqrt(TR/T), size=(N_SAMPLE, T))
+        dW_ = torch.zeros((N_SAMPLE, T))
+        for t in range(T):
+            dW_[:, t] = torch.normal(0, np.sqrt(TIME_LST[t]), size = (N_SAMPLE,))
         W_ = torch.cumsum(torch.cat((torch.zeros((N_SAMPLE, 1)), dW_), dim=1), dim=1)
         stock_st = torch.zeros((N_SAMPLE, T + 1))
         gamma_sn = torch.ones((N_SAMPLE, 1)) @ GAMMA_LIST.cpu().reshape((1, N))
@@ -387,14 +400,14 @@ def discriminator(generator_func, dis_hidden_lst, dis_lr=1e-3, dis_epoch=100, di
             mu_s = get_mu_from_sigma(sigma_s.reshape((N_SAMPLE, 1)), psi_SNT[:,:,t].reshape((N_SAMPLE, N, 1)), W_[:,t].reshape((N_SAMPLE, 1)))
             sigma_st[:,t] = sigma_s
             mu_st[:,t] = mu_s.reshape((-1,))
-            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * TR / T + sigma_st[:,t] * dW_[:,t]
+            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * TIME_LST[t] + sigma_st[:,t] * dW_[:,t] #* TR / T + sigma_st[:,t] * dW_[:,t]
             for n in range(N - 1):
                 if train_on_gpu:
                     x = torch.cat((psi_SNT[:,n,t].reshape((N_SAMPLE, 1)), W_[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1).cuda()
                 else:
                     x = torch.cat((psi_SNT[:,n,t].reshape((N_SAMPLE, 1)), W_[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
                 psi_dot_SNT[:,n,t+1] = generator_func[n * T + t](x).reshape((-1,))
-                psi_SNT[:,n,t+1] += psi_dot_SNT[:,n,t+1] / T * TR + psi_SNT[:,n,t]
+                psi_SNT[:,n,t+1] += psi_dot_SNT[:,n,t+1] * TIME_LST[t] + psi_SNT[:,n,t] #/ T * TR + psi_SNT[:,n,t]
             psi_dot_SNT[:,-1,t+1] = -torch.sum(psi_dot_SNT[:,:-1,t+1], axis=1)
             psi_SNT[:,-1,t+1] = S - torch.sum(psi_SNT[:,:-1,t+1], axis=1)
     
@@ -420,7 +433,9 @@ def discriminator(generator_func, dis_hidden_lst, dis_lr=1e-3, dis_epoch=100, di
     psi_snt_truth = truth_psi(W_, cuda=train_on_gpu)
     mu_st_truth = get_mu_from_sigma(SIGMA_T, psi_snt_truth, W_, is_T=True, cuda=train_on_gpu)
     PSI_DOT_SNT_TRUTH = torch.zeros((N_SAMPLE, N, T + 1))
-    PSI_DOT_SNT_TRUTH[:,:,1:] = (psi_snt_truth[:,:,1:] - psi_snt_truth[:,:,:-1]) * T / TR
+    PSI_DOT_SNT_TRUTH[:,:,1:] = (psi_snt_truth[:,:,1:] - psi_snt_truth[:,:,:-1]) #* T / TR ### TODO: MODIFY IT!!! ###
+    for t in range(T):
+        PSI_DOT_SNT_TRUTH[:,:,t + 1] *= TIME_LST[t]
     if train_on_gpu:
         psi_snt_truth = psi_snt_truth.to(device="cuda")
         PSI_DOT_SNT_TRUTH = PSI_DOT_SNT_TRUTH.to(device="cuda")
@@ -513,14 +528,14 @@ def moderator(gen_hidden_lst, dis_hidden_lst, gen_lr=[1e-3], gen_epoch=[100], ge
             mu_s = get_mu_from_sigma(sigma_s, psi_SNT[:,:,t].reshape((N_SAMPLE, N, 1)), W_ST[:,t].reshape((N_SAMPLE, 1)))
             sigma_st[:,t] = sigma_s.reshape((-1,))
             mu_st[:,t] = mu_s.reshape((-1,))#0.5#
-            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * TR / T + sigma_st[:,t] * dW_ST[:,t]
+            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * TIME_LST[t] + sigma_st[:,t] * dW_ST[:,t] #* TR / T + sigma_st[:,t] * dW_ST[:,t]
             for n in range(N - 1):
                 if train_on_gpu:
                     x = torch.cat((psi_SNT[:,n,t].reshape((N_SAMPLE, 1)), W_ST[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1).cuda()
                 else:
                     x = torch.cat((psi_SNT[:,n,t].reshape((N_SAMPLE, 1)), W_ST[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
                 psi_dot_SNT[:,n,t] = generator_func[n * T + t](x).reshape((-1,))
-                psi_SNT[:,n,t+1] += psi_dot_SNT[:,n,t] / T * TR + psi_SNT[:,n,t]
+                psi_SNT[:,n,t+1] += psi_dot_SNT[:,n,t] * TIME_LST[t] + psi_SNT[:,n,t] #/ T * TR + psi_SNT[:,n,t]
             psi_SNT[:,-1,t+1] = S - torch.sum(psi_SNT[:,:-1,t+1], axis=1)
 
         ## Visualization
@@ -559,9 +574,9 @@ def visualize_comparision(psi_SNT, mu_st, sigma_st, stock_st, visualize_obs, suf
     #suffix = "_" + datetime.now(tz=pytz.timezone("America/New_York")).strftime("%Y-%m-%d-%H-%M")
     ## Plot psi
     for n in range(N):
-        time_stamps = 1 / T * np.arange(psi_SNT.shape[2]) * TR
+        time_stamps = TIME_LST_INT #1 / T * np.arange(psi_SNT.shape[2]) * TR
         plt.plot(time_stamps, psi_SNT[visualize_obs,n,:].cpu().detach().numpy(), label="Estimated ${\\varphi}_t$ Agent " + str(n))
-        time_stamps = 1 / T * np.arange(PSI_SNT_TRUTH.shape[2]) * TR
+        time_stamps = TIME_LST_INT #1 / T * np.arange(PSI_SNT_TRUTH.shape[2]) * TR
         plt.plot(time_stamps, PSI_SNT_TRUTH[visualize_obs,n,:].cpu().detach().numpy(), label="Ground Truth ${\\varphi}_t$ Agent " + str(n))
     plt.xlabel("T")
     plt.ylabel("${\\varphi}_t$")
@@ -575,9 +590,9 @@ def visualize_comparision(psi_SNT, mu_st, sigma_st, stock_st, visualize_obs, suf
     psi_dot_snt = (psi_SNT[:,:,1:] - psi_SNT[:,:,:-1]) * T / TR
     psi_dot_truth = (PSI_SNT_TRUTH[:,:,1:] - PSI_SNT_TRUTH[:,:,:-1]) * T / TR
     for n in range(N):
-        time_stamps = 1 / T * np.arange(psi_dot_snt.shape[2]) * TR
+        time_stamps = TIME_LST_INT[:-1] #1 / T * np.arange(psi_dot_snt.shape[2]) * TR
         plt.plot(time_stamps, psi_dot_snt[visualize_obs,n,:].cpu().detach().numpy(), label="Estimated $\dot{\\varphi}_t$ Agent " + str(n))
-        time_stamps = 1 / T * np.arange(psi_dot_truth.shape[2]) * TR
+        time_stamps = TIME_LST_INT[:-1] #1 / T * np.arange(psi_dot_truth.shape[2]) * TR
         plt.plot(time_stamps, psi_dot_truth[visualize_obs,n,:].cpu().detach().numpy(), label="Ground Truth $\dot{\\varphi}_t$ Agent " + str(n))
     plt.xlabel("T")
     plt.ylabel("$\dot{\\varphi}_t$")
@@ -589,7 +604,7 @@ def visualize_comparision(psi_SNT, mu_st, sigma_st, stock_st, visualize_obs, suf
     #plt.show()
     
     ## Plot stock
-    time_stamps = 1 / T * np.arange(stock_st.shape[1]) * TR
+    time_stamps = TIME_LST_INT #1 / T * np.arange(stock_st.shape[1]) * TR
     plt.plot(time_stamps, stock_st[visualize_obs,:].cpu().detach().numpy(), label="Estimated $S_t$")
     #plt.plot(BETA * 1/T * TR * np.arange(T+1) + ALPHA * W_ST[visualize_obs,:].detach().numpy(), label="Ground Truth $S_T$", color="red")
     plt.axhline(BETA * TR + ALPHA * W_ST[visualize_obs,-1], label="Ground Truth $S_T$", color="red")
@@ -603,9 +618,9 @@ def visualize_comparision(psi_SNT, mu_st, sigma_st, stock_st, visualize_obs, suf
     
     ## Plot sigma
     #for n in range(N):
-    time_stamps = 1 / T * np.arange(sigma_st.shape[1]) * TR
+    time_stamps = TIME_LST_INT[:-1] #1 / T * np.arange(sigma_st.shape[1]) * TR
     plt.plot(time_stamps, sigma_st[visualize_obs,:].cpu().detach().numpy(), label="Estimated $\sigma_t$")
-    time_stamps = 1 / T * np.arange(SIGMA_ST.shape[1]) * TR
+    time_stamps = TIME_LST_INT[:-1] #1 / T * np.arange(SIGMA_ST.shape[1]) * TR
     plt.plot(time_stamps, SIGMA_ST[visualize_obs,:].cpu().detach().numpy(), label="Ground Truth $\sigma_t$")
     plt.xlabel("T")
     plt.ylabel("$\sigma_t$")
@@ -616,9 +631,9 @@ def visualize_comparision(psi_SNT, mu_st, sigma_st, stock_st, visualize_obs, suf
     #plt.show()
     
     ## Plot mu
-    time_stamps = 1 / T * np.arange(mu_st.shape[1]) * TR
+    time_stamps = TIME_LST_INT[:-1] #1 / T * np.arange(mu_st.shape[1]) * TR
     plt.plot(time_stamps, mu_st[visualize_obs,:].cpu().detach().numpy(), label="Estimated $\mu_t$")
-    time_stamps = 1 / T * np.arange(MU_ST.shape[1]) * TR
+    time_stamps = TIME_LST_INT[:-1] #1 / T * np.arange(MU_ST.shape[1]) * TR
     plt.plot(time_stamps, MU_ST[visualize_obs,:].cpu().detach().numpy(), label="Ground Truth $\mu_t$")
     plt.xlabel("T")
     plt.ylabel("$\mu_t$")
@@ -634,7 +649,7 @@ def write_logs(ts_lst, train_args):
             line = f"{ts_lst[i - 1]}\t{ts_lst[i]}\t{json.dumps(train_args)}\n"
             f.write(line)
     
-train_args = {"gen_hidden_lst": [50, 50, 50], "dis_hidden_lst": [50, 50, 50], "gen_lr": [1e-2, 1e-2, 1e-1, 1e-2, 1e-2, 1e-1], "gen_epoch": [100, 500, 1000, 5000, 10000], "gen_decay": 0.1, "gen_scheduler_step": 5000, "dis_lr": [1e-3, 1e-2, 1e-1, 1e-2], "dis_epoch": [10000, 500, 2000, 10000, 20000], "dis_loss": [1, 1, 1, 1], "dis_decay": 0.1, "dis_scheduler_step": 10000, "total_rounds": 1, "visualize_obs": 0, "train_gen": True, "train_dis": False, "use_pretrained_gen": True, "use_pretrained_dis": True, "last_round_dis": False}
+train_args = {"gen_hidden_lst": [50], "dis_hidden_lst": [50, 50, 50], "gen_lr": [1e-2, 1e-2, 1e-1, 1e-2], "gen_epoch": [10, 500, 1000, 5000, 10000], "gen_decay": 0.1, "gen_scheduler_step": 5000, "dis_lr": [1e-2, 1e-1, 1e-2], "dis_epoch": [10, 500, 2000, 10000, 20000], "dis_loss": [1, 1, 1, 1], "dis_decay": 0.1, "dis_scheduler_step": 10000, "total_rounds": 1, "visualize_obs": 0, "train_gen": True, "train_dis": True, "use_pretrained_gen": False, "use_pretrained_dis": False, "last_round_dis": True}
 
 generator_func, discriminator_func, prev_ts, curr_ts_lst = moderator(**train_args)
 
