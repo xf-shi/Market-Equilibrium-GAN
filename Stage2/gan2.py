@@ -501,7 +501,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             model_factory_gen.update_model(generator)
             model_factory_gen.save_to_file(curr_ts)
             visualize_loss(loss_arr_gen, gan_round, "generator", curr_ts, loss_truth_final_gen)
-        if train_dis:
+        if train_dis and (gan_round < total_rounds - 1 or last_round_dis):
             discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts)
             model_factory_dis.update_model(discriminator)
             model_factory_dis.save_to_file(curr_ts)
