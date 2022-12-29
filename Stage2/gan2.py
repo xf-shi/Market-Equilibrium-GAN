@@ -24,37 +24,38 @@ else:
     DEVICE = "cuda"
 
 ## Global Constants
-S_VAL = 245714618646 #1#
+S_VAL = 1 #245714618646 #1#
 
-TR = 20
+TR = 1#20
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
 N_SAMPLE = 300 #128
 ALPHA = 1 #1 #
-BETA = 0.5
-GAMMA_BAR = 8.30864e-14 * S_VAL
-KAPPA = 2.
+BETA = 1 #0.5
+# GAMMA_BAR = 8.30864e-14 * S_VAL
+# KAPPA = 2.
 
-GAMMA_1 = GAMMA_BAR*(KAPPA+1)/KAPPA
-GAMMA_2 = GAMMA_BAR*(KAPPA+1)
+# GAMMA_1 = GAMMA_BAR*(KAPPA+1)/KAPPA
+# GAMMA_2 = GAMMA_BAR*(KAPPA+1)
+GAMMA_1 = 1
+GAMMA_2 = 2
 
 XI_LIST = torch.tensor([3, -3]).float()
 GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float()
 
 S = 1
-LAM = 1.08102e-10 * S_VAL #0.1 #
+LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
 
-S_TERMINAL = 245.47
-S_INITIAL = 250 #0#
-
-BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
+S_TERMINAL = 1/3 #245.47
+S_INITIAL = 0 #250 #0#
 
 assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-1]
 
 GAMMA_BAR = 1 / torch.sum(1 / GAMMA_LIST)
 GAMMA_MAX = torch.max(GAMMA_LIST)
 N_AGENT = len(XI_LIST)
+BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
 
 ## Setup Numpy Counterparts
 GAMMA_LIST_NP = GAMMA_LIST.numpy().reshape((1, N_AGENT))
@@ -268,9 +269,10 @@ class DynamicFactory():
                 x_dis = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
             else:
                 x_dis = torch.cat((delta_phi_stn, curr_t), dim=1)
-            sigma_st[:,t] = dis_model((t, x_dis)).reshape((-1,))
+            sigma_s = dis_model((t, x_dis)).reshape((-1,))
+            sigma_st[:,t] = sigma_s
             if use_true_mu:
-                mu_st[:,t] = get_mu_from_sigma(sigma_st[:,t].reshape((self.n_sample, 1)), phi_stn[:,t,:].reshape((self.n_sample, 1, N_AGENT)), self.W_st[:,t].reshape((self.n_sample, 1))).reshape((-1,))
+                mu_st[:,t] = get_mu_from_sigma(sigma_s.reshape((self.n_sample, 1)), phi_stn[:,t,:].reshape((self.n_sample, 1, N_AGENT)), self.W_st[:,t].reshape((self.n_sample, 1))).reshape((-1,))
             else:
                 if not use_fast_var:
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
@@ -536,27 +538,27 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2],
-    "gen_epoch": [100, 100, 500, 1000, 5000, 10000],
+    "gen_epoch": [500, 1000, 10000, 50000],
     "gen_decay": 0.1,
-    "gen_scheduler_step": 5000,
+    "gen_scheduler_step": 100000,
     "dis_lr": [1e-2, 1e-2, 1e-2],
-    "dis_epoch": [100,100, 500, 2000, 10000, 20000],
+    "dis_epoch": [500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
-    "dis_scheduler_step": 10000,
+    "dis_scheduler_step": 100000,
     "gen_sample": [128, 128],
-    "dis_sample": [128, 128],
+    "dis_sample": [3000, 128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
-    "total_rounds": 2,
+    "total_rounds": 4,
     "visualize_obs": 0,
     "train_gen": True,
     "train_dis": True,
     "use_pretrained_gen": False,
     "use_pretrained_dis": False,
-    "use_true_mu": False,
-    "use_fast_var": False,
-    "last_round_dis": False,
+    "use_true_mu": True,
+    "use_fast_var": True,
+    "last_round_dis": True,
     "seed": 0,
     "ckpt_freq": 10000
 }
