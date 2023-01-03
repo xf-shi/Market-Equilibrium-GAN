@@ -42,7 +42,7 @@ GAMMA_1 = 1
 GAMMA_2 = 2
 
 XI_LIST = torch.tensor([3, -3]).float()
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float()
+GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
 S = 1
 LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
@@ -58,10 +58,10 @@ N_AGENT = len(XI_LIST)
 BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
 
 ## Setup Numpy Counterparts
-GAMMA_LIST_NP = GAMMA_LIST.numpy().reshape((1, N_AGENT))
+GAMMA_LIST_NP = GAMMA_LIST.cpu().numpy().reshape((1, N_AGENT))
 XI_LIST_NP = XI_LIST.numpy().reshape((1, N_AGENT))
-GAMMA_BAR_NP = GAMMA_BAR.numpy()
-GAMMA_MAX_NP = GAMMA_MAX.numpy()
+GAMMA_BAR_NP = GAMMA_BAR.cpu().numpy()
+GAMMA_MAX_NP = GAMMA_MAX.cpu().numpy()
 ###
 
 def get_W(dW_st, W_s0 = None):
@@ -491,6 +491,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
     else:
         model = discriminator
         loss_truth_final = loss_factory.stock_loss(stock_st, power = dis_loss)
+    loss_truth_final = float(loss_truth_final.data)
     return model, loss_arr, loss_truth_final
 
 def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, dis_loss = [1], use_true_mu = False, use_fast_var = False, total_rounds = 1, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, train_args = None):
