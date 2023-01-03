@@ -162,7 +162,7 @@ class ModelFull(nn.Module):
 
 ## Construct arbitrary neural network models with optimizer and scheduler
 class ModelFactory:
-    def __init__(self, time_len, algo, input_dim, hidden_lst, output_dim, lr, decay, scheduler_step, use_s0 = False, solver = "Adam", retrain = False):
+    def __init__(self, time_len, algo, input_dim, hidden_lst, output_dim, lr, decay, scheduler_step, use_s0 = False, solver = "Adam", retrain = False, constant_len = 0):
         assert solver in ["Adam", "SGD", "RMSprop"]
         assert algo in ["generator", "discriminator"]
         self.lr = lr
@@ -177,6 +177,7 @@ class ModelFactory:
         self.algo = algo
         self.time_len = time_len
         self.use_s0 = use_s0
+        self.constant_len = constant_len
 
         if not retrain:
             self.model, self.prev_ts = self.load_latest()
@@ -192,7 +193,10 @@ class ModelFactory:
     ## TODO: Implement it -- Zhanhao Zhang
     def discretized_feedforward(self):
         model_list = nn.ModuleList()
-        for _ in range(self.time_len):
+        for _ in range(self.constant_len):
+            model = Net(1, self.hidden_lst, self.output_dim)
+            model_list.append(model)
+        for _ in range(self.time_len - self.constant_len):
             model = Net(self.input_dim, self.hidden_lst, self.output_dim)
             model_list.append(model)
         return model_list
@@ -236,6 +240,7 @@ class DynamicFactory():
     def __init__(self, dW_st, W_s0 = None):
         self.dW_st = dW_st
         self.W_st = get_W(dW_st, W_s0 = W_s0)
+        self.dW_st = self.dW_st.to(device = DEVICE)
         self.n_sample = self.dW_st.shape[0]
         self.T = self.dW_st.shape[1]
         
@@ -268,7 +273,7 @@ class DynamicFactory():
             if not use_fast_var:
                 x_dis = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
             else:
-                x_dis = torch.cat((delta_phi_stn, curr_t), dim=1)
+                x_dis = torch.cat((delta_phi_stn, curr_t), dim=1) #curr_t.reshape((self.n_sample, 1)) #
             sigma_s = dis_model((t, x_dis)).reshape((-1,))
             sigma_st[:,t] = sigma_s
             if use_true_mu:
@@ -323,6 +328,7 @@ class LossFactory():
     def __init__(self, dW_st, W_s0 = None):
         self.dW_st = dW_st
         self.W_st = get_W(dW_st, W_s0 = W_s0)
+        self.dW_st = self.dW_st.to(device = DEVICE)
         self.n_sample = self.dW_st.shape[0]
         self.T = self.dW_st.shape[1]
     
@@ -443,7 +449,7 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
         input_dim = 2 + N_AGENT
     else:
         input_dim = 1 + N_AGENT
-    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain)
+    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = 0)
     return model_factory
 
 def slc(lst, idx):
@@ -466,6 +472,8 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         loss.backward()
         if train_type == "generator":
             loss = loss * S_VAL
+        else:
+            loss = loss
         loss_arr.append(float(loss.data))
         optimizer.step()
         scheduler.step()
@@ -537,26 +545,26 @@ def transfer_learning():
 train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-2, 1e-2],
+    "gen_lr": [1e-2, 1e-1, 1e-2],
     "gen_epoch": [500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-2, 1e-2],
+    "dis_lr": [1e-2, 1e-1, 1e-2],
     "dis_epoch": [500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
-    "dis_scheduler_step": 100000,
+    "dis_scheduler_step": 20000,
     "gen_sample": [128, 128],
-    "dis_sample": [3000, 128, 128],
+    "dis_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "total_rounds": 4,
     "visualize_obs": 0,
     "train_gen": True,
     "train_dis": True,
-    "use_pretrained_gen": False,
-    "use_pretrained_dis": False,
-    "use_true_mu": True,
+    "use_pretrained_gen": True,
+    "use_pretrained_dis": True,
+    "use_true_mu": False,
     "use_fast_var": True,
     "last_round_dis": True,
     "seed": 0,
