@@ -262,7 +262,7 @@ class DynamicFactory():
         phi_bar_stn = torch.zeros((self.n_sample, self.T, N_AGENT)).to(device = DEVICE)
         ## Initialize stock
         if combo_model is None:
-            stock_st[:,0] = dis_model((-1, dummy_one)).reshape((-1,)) #(BETA - GAMMA_BAR * ALPHA ** 2 * S) * TR #
+            stock_st[:,0] = -0.19 #dis_model((-1, dummy_one)).reshape((-1,)) #(BETA - GAMMA_BAR * ALPHA ** 2 * S) * TR #
         else:
             stock_st[:,0] = combo_model((-1, dummy_one)).reshape((-1,))
         ## Begin iteration
@@ -314,7 +314,7 @@ class DynamicFactory():
                 n_agent_itr -= 1
             for n in range(n_agent_itr):
                 if not use_fast_var:
-                    x_gen = torch.cat((phi_stn[:,t,:], mu_s.reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
+                    x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
                 else:
                     x_gen = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 if combo_model is None:
@@ -478,7 +478,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
 def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False, clearing_known = True):
     retrain = not use_pretrained_gen
     if not use_fast_var:
-        input_dim = 2 + N_AGENT
+        input_dim = 2 + 1 + 1#2 + N_AGENT
     else:
         input_dim = 1 + N_AGENT
     n_model = T * (N_AGENT - 1)
@@ -529,7 +529,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         else:
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
         if train_type == "generator":
-            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st)
+            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) #+ loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         elif train_type == "discriminator":
             loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         else:
@@ -633,11 +633,11 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-1, 1e-2],
+    "gen_lr": [1e-2, 1e-2, 1e-2, 1e-3],
     "gen_epoch": [500, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-1, 1e-2],
+    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-3],
     "dis_epoch": [500, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
@@ -646,13 +646,13 @@ train_args = {
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [128, 128],
-    "dis_sample": [128, 128],
+    "gen_sample": [128],
+    "dis_sample": [128],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,
+    "total_rounds": 15,
     "visualize_obs": 0,
     "train_gen": True,
     "train_dis": True,
