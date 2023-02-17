@@ -269,11 +269,12 @@ class DynamicFactory():
             for n in range(N_AGENT):
                 phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
             delta_phi_stn = phi_stn[:,t,:] - phi_bar_stn[:,t,:]
+            fast_var_stn = (phi_stn[:,t,:] * sigma_s[:,None] + self.xi_stn[:,t,:]) * sigma_s[:,None]
             ## Discriminator output
             if not use_fast_var:
                 x_dis = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
             else:
-                x_dis = torch.cat((delta_phi_stn, curr_t), dim=1) #curr_t.reshape((self.n_sample, 1)) #
+                x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((delta_phi_stn, curr_t), dim=1) #
             sigma_s = dis_model((t, x_dis)).reshape((-1,))
             sigma_st[:,t] = sigma_s
             if use_true_mu:
@@ -282,7 +283,7 @@ class DynamicFactory():
                 if not use_fast_var:
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
-                    x_mu = torch.cat((delta_phi_stn, curr_t), dim=1)
+                    x_mu = torch.cat((fast_var_stn, curr_t), dim=1) #torch.cat((delta_phi_stn, curr_t), dim=1)
                 mu_st[:,t] = dis_model((self.T + t, x_mu)).reshape((-1,))
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
             ## Generator output
@@ -290,7 +291,7 @@ class DynamicFactory():
                 if not use_fast_var:
                     x_gen = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
-                    x_gen = torch.cat((delta_phi_stn, curr_t), dim=1)
+                    x_gen = torch.cat((fast_var_stn, curr_t), dim=1) #torch.cat((delta_phi_stn, curr_t), dim=1)
                 phi_dot_stn[:,t,n] = gen_model((n * self.T + t, x_gen)).reshape((-1,))
                 phi_stn[:,t+1,n] = phi_stn[:,t,n] + phi_dot_stn[:,t,n] * DT
             phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
@@ -449,7 +450,7 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
         input_dim = 2 + N_AGENT
     else:
         input_dim = 1 + N_AGENT
-    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = 0)
+    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T)
     return model_factory
 
 def slc(lst, idx):
