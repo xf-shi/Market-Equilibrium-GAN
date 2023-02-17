@@ -164,7 +164,7 @@ class ModelFull(nn.Module):
 class ModelFactory:
     def __init__(self, time_len, algo, input_dim, hidden_lst, output_dim, lr, decay, scheduler_step, use_s0 = False, solver = "Adam", retrain = False, constant_len = 0):
         assert solver in ["Adam", "SGD", "RMSprop"]
-        assert algo in ["generator", "discriminator"]
+        assert algo in ["generator", "discriminator", "combo"]
         self.lr = lr
         self.decay = decay
         self.scheduler_step = scheduler_step
@@ -250,7 +250,7 @@ class DynamicFactory():
             self.xi_stn[:,:,n] = XI_LIST[n] * self.W_st[:,1:]
         self.mu_bar = GAMMA_BAR * ALPHA ** 2 * S
     
-    def deep_hedging(self, gen_model, dis_model, use_true_mu = False, use_fast_var = False):
+    def deep_hedging(self, gen_model, dis_model, use_true_mu = False, use_fast_var = False, combo_model = None, clearing_known = True):
         ## Setup variables
         phi_dot_stn = torch.zeros((self.n_sample, self.T, N_AGENT)).to(device = DEVICE)
         phi_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
@@ -261,41 +261,67 @@ class DynamicFactory():
         dummy_one = torch.ones((self.n_sample, 1)).to(device = DEVICE)
         phi_bar_stn = torch.zeros((self.n_sample, self.T, N_AGENT)).to(device = DEVICE)
         ## Initialize stock
-        stock_st[:,0] = dis_model((-1, dummy_one)).reshape((-1,))
+        if combo_model is None:
+            stock_st[:,0] = dis_model((-1, dummy_one)).reshape((-1,)) #-0.19 #(BETA - GAMMA_BAR * ALPHA ** 2 * S) * TR #
+        else:
+            stock_st[:,0] = combo_model((-1, dummy_one)).reshape((-1,))
         ## Begin iteration
+        sigma_s = None
+        if clearing_known:
+            combo_offset = self.T * (N_AGENT - 1)
+        else:
+            combo_offset = self.T * N_AGENT
         for t in range(self.T):
             curr_t = torch.ones((self.n_sample, 1)).to(device = DEVICE)
             ## Populate phi_bar
             for n in range(N_AGENT):
                 phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
+#                 if t == 0:
+#                     phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
+#                 else:
+#                     phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / sigma_s ** 2 - XI_LIST[n] / sigma_s * self.W_st[:,t]
             delta_phi_stn = phi_stn[:,t,:] - phi_bar_stn[:,t,:]
-            fast_var_stn = (phi_stn[:,t,:] * sigma_s[:,None] + self.xi_stn[:,t,:]) * sigma_s[:,None]
-            ## Discriminator output
+            ## Discriminator - Sigma output
             if not use_fast_var:
                 x_dis = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
             else:
                 x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((delta_phi_stn, curr_t), dim=1) #
-            sigma_s = dis_model((t, x_dis)).reshape((-1,))
+            if combo_model is None:
+                sigma_s = torch.abs(dis_model((t, x_dis)).reshape((-1,)))
+            else:
+                sigma_s = torch.abs(combo_model((combo_offset + t, x_dis)).reshape((-1,)))
             sigma_st[:,t] = sigma_s
+            fast_var_stn = (phi_stn.clone()[:,t,:] * sigma_s.reshape((self.n_sample, 1)) + self.xi_stn[:,t,:]) * sigma_s.reshape((self.n_sample, 1))
+            
+            ## Discriminator - Mu output
             if use_true_mu:
-                mu_st[:,t] = get_mu_from_sigma(sigma_s.reshape((self.n_sample, 1)), phi_stn[:,t,:].reshape((self.n_sample, 1, N_AGENT)), self.W_st[:,t].reshape((self.n_sample, 1))).reshape((-1,))
+                mu_s = get_mu_from_sigma(sigma_s.reshape((self.n_sample, 1)), phi_stn[:,t,:].reshape((self.n_sample, 1, N_AGENT)), self.W_st[:,t].reshape((self.n_sample, 1))).reshape((-1,))
             else:
                 if not use_fast_var:
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
                     x_mu = torch.cat((fast_var_stn, curr_t), dim=1) #torch.cat((delta_phi_stn, curr_t), dim=1)
-                mu_st[:,t] = dis_model((self.T + t, x_mu)).reshape((-1,))
+                mu_s = dis_model((self.T + t, x_mu)).reshape((-1,))
+            mu_st[:,t] = mu_s
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
+            
             ## Generator output
-            for n in range(N_AGENT - 1):
+            n_agent_itr = N_AGENT
+            if clearing_known:
+                n_agent_itr -= 1
+            for n in range(n_agent_itr):
                 if not use_fast_var:
-                    x_gen = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
+                    x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
                 else:
-                    x_gen = torch.cat((fast_var_stn, curr_t), dim=1) #torch.cat((delta_phi_stn, curr_t), dim=1)
-                phi_dot_stn[:,t,n] = gen_model((n * self.T + t, x_gen)).reshape((-1,))
+                    x_gen = torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
+                if combo_model is None:
+                    phi_dot_stn[:,t,n] = gen_model((n * self.T + t, x_gen)).reshape((-1,))
+                else:
+                    phi_dot_stn[:,t,n] = combo_model((n * self.T + t, x_gen)).reshape((-1,))
                 phi_stn[:,t+1,n] = phi_stn[:,t,n] + phi_dot_stn[:,t,n] * DT
-            phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
-            phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
+            if clearing_known:
+                phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
+                phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def leading_order(self):
@@ -310,6 +336,7 @@ class DynamicFactory():
         stock_st = torch.zeros((self.n_sample, self.T + 1)).to(device = DEVICE)
         ones = torch.ones((self.n_sample, 1)).to(device = DEVICE)
         ## Begin iteration
+#         stock_st[:,0] = (BETA - GAMMA_BAR * ALPHA ** 2 * S) * TR
         sigma_t = ALPHA + GAMMA_BAR * (1 / GAMMA_LIST[:-1] - 1 / GAMMA_MAX).reshape((1, N_AGENT - 1)) @ H_exact[:-1,:]
         sigma_st = ones @ sigma_t.reshape((1, T))
         for t in range(T):
@@ -339,9 +366,22 @@ class LossFactory():
             loss += (torch.mean(-torch.sum(mu_st * phi_stn[:,1:,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,1:,n] + self.W_st[:,1:] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(phi_dot_stn[:,:,n] ** 2, axis = 1)) / self.T) / N_AGENT
         return loss
     
+    def clearing_loss(self, phi_dot_stn, power = 2):
+        loss = torch.abs(torch.sum(phi_dot_stn, axis = 2)) ** power
+        return torch.mean(loss)
+    
+    def clearing_loss_phi(self, phi_stn, power = 2):
+        loss = torch.abs(torch.sum(phi_stn, axis = 2) - S) ** power
+        return torch.mean(loss)
+    
     def stock_loss(self, stock_st, power = 2):
         target = BETA * TR + ALPHA * self.W_st[:,-1]
         loss = torch.abs(stock_st[:,-1] - target) ** power
+        return torch.mean(loss)
+    
+    def stock_loss_init(self, stock_st, power = 2):
+        target = (BETA - GAMMA_BAR * ALPHA ** 2 * S) * TR
+        loss = torch.abs(stock_st[:,0] - target) ** power
         return torch.mean(loss)
 
 ## Write training logs to file
@@ -432,13 +472,16 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_{ts}.png", bbox_inches='tight')
         plt.close()
 
-def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False):
+def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False, clearing_known = True):
     retrain = not use_pretrained_gen
     if not use_fast_var:
-        input_dim = 2 + N_AGENT
+        input_dim = 2 + 1 + 1#2 + N_AGENT
     else:
-        input_dim = 1 + N_AGENT
-    model_factory = ModelFactory(T, "generator", input_dim, gen_hidden_lst, 1, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain)
+        input_dim = 3 + N_AGENT
+    n_model = T * (N_AGENT - 1)
+    if not clearing_known:
+        n_model += T
+    model_factory = ModelFactory(n_model, "generator", input_dim, gen_hidden_lst, 1, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain)
     return model_factory
 
 def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver = "Adam", use_pretrained_dis = True, use_true_mu = False, use_fast_var = False):
@@ -453,25 +496,44 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
     model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T)
     return model_factory
 
+def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver = "Adam", use_pretrained_combo = True, use_true_mu = False, use_fast_var = False, clearing_known = True):
+    n_model = T * (N_AGENT - 1) + T + 1
+    if not clearing_known:
+        n_model += T
+    if not use_true_mu:
+        n_model += T
+    retrain = not use_pretrained_combo
+    if not use_fast_var:
+        input_dim = 2 + N_AGENT
+    else:
+        input_dim = 1 + N_AGENT
+    model_factory = ModelFactory(n_model, "combo", input_dim, combo_hidden_lst, 1, combo_lr, combo_decay, combo_scheduler_step, use_s0 = True, solver = combo_solver, retrain = retrain, constant_len = 0)
+    return model_factory
+
 def slc(lst, idx):
     return lst[min(idx, len(lst) - 1)]
 
-def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None):
-    assert train_type in ["generator", "discriminator"]
+def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True):
+    assert train_type in ["generator", "discriminator", "combo"]
     loss_arr = []
     for itr in tqdm(range(epoch)):
         optimizer.zero_grad()
         dW_st = torch.normal(0, np.sqrt(DT), (sample_size, T))
         dynamic_factory = DynamicFactory(dW_st)
         loss_factory = LossFactory(dW_st)
-        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
-        if train_type == "generator":
-            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st)
+        if train_type == "combo":
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo_model, clearing_known = clearing_known)
         else:
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss)
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
+        if train_type == "generator":
+            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) #+ loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
+        elif train_type == "discriminator":
+            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
+        else:
+            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
         loss.backward()
-        if train_type == "generator":
+        if train_type in ["generator", "combo"]:
             loss = loss * S_VAL
         else:
             loss = loss
@@ -482,20 +544,25 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         if itr % ckpt_freq == 0 and itr > 0:
             if train_type == "generator":
                 model_factory.update_model(generator)
-            else:
+            elif train_type == "discriminator":
                 model_factory.update_model(discriminator)
+            else:
+                model_factory.update_model(combo_model)
             model_factory.save_to_file(curr_ts)
     phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.ground_truth(F_exact, H_exact)
     if train_type == "generator":
         model = generator
         loss_truth_final = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) * S_VAL
-    else:
+    elif train_type == "discriminator":
         model = discriminator
         loss_truth_final = loss_factory.stock_loss(stock_st, power = dis_loss)
+    else:
+        model = combo_model
+        loss_truth_final = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) * S_VAL + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) * S_VAL
     loss_truth_final = float(loss_truth_final.data)
     return model, loss_arr, loss_truth_final
 
-def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, dis_loss = [1], use_true_mu = False, use_fast_var = False, total_rounds = 1, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, train_args = None):
+def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver, combo_epoch, combo_sample, use_pretrained_combo, dis_loss = [1], use_true_mu = False, use_fast_var = False, total_rounds = 1, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, use_combo = False, clearing_known = True, train_args = None):
     ## Generate Brownian paths for testing
     torch.manual_seed(seed)
     dW_st_eval = torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T))
@@ -504,26 +571,38 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
     for gan_round in range(total_rounds):
         print(f"Round #{gan_round + 1}:")
         curr_ts = datetime.now(tz=pytz.timezone("America/New_York")).strftime("%Y-%m-%d-%H-%M-%S")
-        model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = use_pretrained_gen or not train_gen or gan_round > 0, use_fast_var = use_fast_var)
-        model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = use_pretrained_dis or not train_dis or gan_round > 0, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
-        generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
-        discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
-        if train_gen:
-            print("\tTraining Generator...")
-            generator, loss_arr_gen, loss_truth_final_gen = train_single(generator, discriminator, optimizer_gen, scheduler_gen, slc(gen_epoch, gan_round), slc(gen_sample, gan_round), use_true_mu, use_fast_var, "generator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_gen, curr_ts = curr_ts)
-            model_factory_gen.update_model(generator)
-            model_factory_gen.save_to_file(curr_ts)
-            visualize_loss(loss_arr_gen, gan_round, "generator", curr_ts, loss_truth_final_gen)
-        if train_dis and (gan_round < total_rounds - 1 or last_round_dis):
+        if not use_combo:
+            model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = use_pretrained_gen or not train_gen or gan_round > 0, use_fast_var = use_fast_var, clearing_known = clearing_known)
+            model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = use_pretrained_dis or not train_dis or gan_round > 0, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+            generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
+            discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
+            if train_gen:
+                print("\tTraining Generator...")
+                generator, loss_arr_gen, loss_truth_final_gen = train_single(generator, discriminator, optimizer_gen, scheduler_gen, slc(gen_epoch, gan_round), slc(gen_sample, gan_round), use_true_mu, use_fast_var, "generator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_gen, curr_ts = curr_ts, clearing_known = clearing_known)
+                model_factory_gen.update_model(generator)
+                model_factory_gen.save_to_file(curr_ts)
+                visualize_loss(loss_arr_gen, gan_round, "generator", curr_ts, loss_truth_final_gen)
+            if train_dis and (gan_round < total_rounds - 1 or last_round_dis):
+                print("\tTraining Discriminator...")
+                discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts, clearing_known = clearing_known)
+                model_factory_dis.update_model(discriminator)
+                model_factory_dis.save_to_file(curr_ts)
+                visualize_loss(loss_arr_dis, gan_round, "discriminator", curr_ts, loss_truth_final_dis)
+        else:
+            model_factory_combo = prepare_combo(combo_hidden_lst, slc(combo_lr, gan_round), combo_decay, combo_scheduler_step, combo_solver = slc(combo_solver, gan_round), use_pretrained_combo = use_pretrained_combo or gan_round > 0, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
+            combo, optimizer_combo, scheduler_combo, prev_ts_combo = model_factory_combo.prepare_model()
             print("\tTraining Discriminator...")
-            discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts)
-            model_factory_dis.update_model(discriminator)
-            model_factory_dis.save_to_file(curr_ts)
-            visualize_loss(loss_arr_dis, gan_round, "discriminator", curr_ts, loss_truth_final_dis)
+            combo, loss_arr_combo, loss_truth_final_combo = train_single(None, None, optimizer_combo, scheduler_combo, slc(combo_epoch, gan_round), slc(combo_sample, gan_round), use_true_mu, use_fast_var, "combo", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_combo, curr_ts = curr_ts, combo_model = combo, clearing_known = clearing_known)
+            model_factory_combo.update_model(combo)
+            model_factory_combo.save_to_file(curr_ts)
+            visualize_loss(loss_arr_combo, gan_round, "combo", curr_ts, loss_truth_final_combo)
         ## Evaluation per round
         dynamic_factory = DynamicFactory(dW_st_eval)
         loss_factory = LossFactory(dW_st_eval)
-        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+        if not use_combo:
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
+        else:
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo, clearing_known = clearing_known)
         loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) * S_VAL
         loss_stock = loss_factory.stock_loss(stock_st, power = slc(dis_loss, gan_round))
 
@@ -538,7 +617,10 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", "Ground Truth"], comment = comment)
         visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", "Ground Truth"], comment = comment)
         ## Save logs to file
-        write_logs([prev_ts_gen, curr_ts], train_args)
+        if not use_combo:
+            write_logs([prev_ts_gen, curr_ts], train_args)
+        else:
+            write_logs([prev_ts_combo, curr_ts], train_args)
 
 def transfer_learning():
     pass
@@ -547,29 +629,39 @@ def transfer_learning():
 train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-1, 1e-2],
-    "gen_epoch": [500, 1000, 10000, 50000],
+    "combo_hidden_lst": [50, 50, 50],
+    "gen_lr": [1e-2, 1e-2, 1e-2, 1e-3],
+    "gen_epoch": [500, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-1, 1e-2],
-    "dis_epoch": [500, 2000, 10000, 50000],
+    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-3],
+    "dis_epoch": [500, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
-    "dis_scheduler_step": 20000,
-    "gen_sample": [128, 128],
-    "dis_sample": [128, 128],
+    "dis_scheduler_step": 50000,
+    "combo_lr": [1e-3],
+    "combo_epoch": [100000],#[500, 1000, 10000, 50000],
+    "combo_decay": 0.1,
+    "combo_scheduler_step": 50000,
+    "gen_sample": [128],
+    "dis_sample": [128],
+    "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
-    "total_rounds": 4,
+    "combo_solver": ["Adam"],
+    "total_rounds": 15,
     "visualize_obs": 0,
     "train_gen": True,
     "train_dis": True,
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
+    "use_pretrained_combo": True,
     "use_true_mu": False,
     "use_fast_var": True,
     "last_round_dis": True,
     "seed": 0,
-    "ckpt_freq": 10000
+    "ckpt_freq": 10000,
+    "use_combo": False,
+    "clearing_known": False
 }
 training_pipeline(train_args = train_args, **train_args)
