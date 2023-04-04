@@ -41,13 +41,16 @@ BETA = 1 #0.5
 GAMMA_1 = 1
 GAMMA_2 = 2
 
-XI_LIST = torch.tensor([3, -3]).float()
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
+# XI_LIST = torch.tensor([3, -3]).float()
+# GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
+
+XI_LIST = torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float()
+GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
 S = 1
 LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
 
-S_TERMINAL = 1/3 #245.47
+S_TERMINAL = 1#1/3 #245.47
 S_INITIAL = 0 #250 #0#
 
 assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-1]
@@ -300,7 +303,7 @@ class DynamicFactory():
                 if not use_fast_var:
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
-                    x_mu = torch.cat((fast_var_stn, curr_t), dim=1) #torch.cat((delta_phi_stn, curr_t), dim=1)
+                    x_mu = torch.cat((delta_phi_stn, curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
                 mu_s = dis_model((self.T + t, x_mu)).reshape((-1,))
             mu_st[:,t] = mu_s
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
@@ -309,19 +312,34 @@ class DynamicFactory():
             n_agent_itr = N_AGENT
             if clearing_known:
                 n_agent_itr -= 1
-            for n in range(n_agent_itr):
-                if not use_fast_var:
-                    x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
-                else:
-                    x_gen = torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
-                if combo_model is None:
-                    phi_dot_stn[:,t,n] = gen_model((n * self.T + t, x_gen)).reshape((-1,))
-                else:
-                    phi_dot_stn[:,t,n] = combo_model((n * self.T + t, x_gen)).reshape((-1,))
-                phi_stn[:,t+1,n] = phi_stn[:,t,n] + phi_dot_stn[:,t,n] * DT
+            if not use_fast_var:
+                x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
+            else:
+                x_gen = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
+            if combo_model is None:
+                phi_dot_stn[:,t,:n_agent_itr] = gen_model((t, x_gen))
+            else:
+                phi_dot_stn[:,t,:n_agent_itr] = combo_model((t, x_gen))
+            phi_stn[:,t+1,:n_agent_itr] = phi_stn[:,t,:n_agent_itr] + phi_dot_stn[:,t,:n_agent_itr] * DT
             if clearing_known:
                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
+#             n_agent_itr = N_AGENT
+#             if clearing_known:
+#                 n_agent_itr -= 1
+#             for n in range(n_agent_itr):
+#                 if not use_fast_var:
+#                     x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
+#                 else:
+#                     x_gen = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
+#                 if combo_model is None:
+#                     phi_dot_stn[:,t,n] = gen_model((n * self.T + t, x_gen)).reshape((-1,))
+#                 else:
+#                     phi_dot_stn[:,t,n] = combo_model((n * self.T + t, x_gen)).reshape((-1,))
+#                 phi_stn[:,t+1,n] = phi_stn[:,t,n] + phi_dot_stn[:,t,n] * DT
+#             if clearing_known:
+#                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
+#                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def leading_order(self):
@@ -477,11 +495,14 @@ def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
     if not use_fast_var:
         input_dim = 2 + 1 + 1#2 + N_AGENT
     else:
-        input_dim = 3 + N_AGENT
-    n_model = T * (N_AGENT - 1)
+        input_dim = 2 + N_AGENT
+    n_model = T #T * (N_AGENT - 1)
+#     if not clearing_known:
+#         n_model += T
+    output_dim = N_AGENT - 1
     if not clearing_known:
-        n_model += T
-    model_factory = ModelFactory(n_model, "generator", input_dim, gen_hidden_lst, 1, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain)
+        output_dim += 1
+    model_factory = ModelFactory(n_model, "generator", input_dim, gen_hidden_lst, output_dim, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain)
     return model_factory
 
 def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver = "Adam", use_pretrained_dis = True, use_true_mu = False, use_fast_var = False):
@@ -630,12 +651,12 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-2, 1e-2, 1e-3],
-    "gen_epoch": [500, 1000, 10000],#[500, 1000, 10000, 50000],
+    "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
+    "gen_epoch": [10000],#[500, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-3],
-    "dis_epoch": [500, 1000, 10000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-3],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-2],
+    "dis_epoch": [10000],#[500, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
@@ -656,12 +677,12 @@ train_args = {
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
     "use_pretrained_combo": True,
-    "use_true_mu": False,
+    "use_true_mu": True,
     "use_fast_var": True,
     "last_round_dis": True,
     "seed": 0,
     "ckpt_freq": 10000,
     "use_combo": False,
-    "clearing_known": False
+    "clearing_known": True
 }
 training_pipeline(train_args = train_args, **train_args)
