@@ -47,6 +47,8 @@ GAMMA_2 = 2
 XI_LIST = torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float()
 GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
+XI_NORM_LIST = torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)
+
 S = 1
 LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
 
@@ -279,10 +281,6 @@ class DynamicFactory():
             ## Populate phi_bar
             for n in range(N_AGENT):
                 phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
-#                 if t == 0:
-#                     phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
-#                 else:
-#                     phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / sigma_s ** 2 - XI_LIST[n] / sigma_s * self.W_st[:,t]
             delta_phi_stn = phi_stn[:,t,:] - phi_bar_stn[:,t,:]
             ## Discriminator - Sigma output
             if not use_fast_var:
@@ -324,22 +322,6 @@ class DynamicFactory():
             if clearing_known:
                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
-#             n_agent_itr = N_AGENT
-#             if clearing_known:
-#                 n_agent_itr -= 1
-#             for n in range(n_agent_itr):
-#                 if not use_fast_var:
-#                     x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
-#                 else:
-#                     x_gen = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
-#                 if combo_model is None:
-#                     phi_dot_stn[:,t,n] = gen_model((n * self.T + t, x_gen)).reshape((-1,))
-#                 else:
-#                     phi_dot_stn[:,t,n] = combo_model((n * self.T + t, x_gen)).reshape((-1,))
-#                 phi_stn[:,t+1,n] = phi_stn[:,t,n] + phi_dot_stn[:,t,n] * DT
-#             if clearing_known:
-#                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
-#                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def leading_order(self):
@@ -371,17 +353,21 @@ class DynamicFactory():
         pass
 
 class LossFactory():
-    def __init__(self, dW_st, W_s0 = None):
+    def __init__(self, dW_st, W_s0 = None, normalize = False):
         self.dW_st = dW_st
         self.W_st = get_W(dW_st, W_s0 = W_s0)
         self.dW_st = self.dW_st.to(device = DEVICE)
         self.n_sample = self.dW_st.shape[0]
         self.T = self.dW_st.shape[1]
+        self.normalize = normalize
     
-    def utility_loss(self, phi_dot_stn, phi_stn, mu_st, sigma_st):
+    def utility_loss(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
         loss = 0
         for n in range(N_AGENT):
-            loss += (torch.mean(-torch.sum(mu_st * phi_stn[:,1:,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,1:,n] + self.W_st[:,1:] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(phi_dot_stn[:,:,n] ** 2, axis = 1)) / self.T) / N_AGENT
+            loss_curr = (torch.mean(-torch.sum(mu_st * phi_stn[:,1:,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,1:,n] + self.W_st[:,1:] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(phi_dot_stn[:,:,n] ** power, axis = 1)) / self.T) / N_AGENT
+            if self.normalize:
+                loss_curr = loss_curr * XI_NORM_LIST[n]
+            loss += loss_curr
         return loss
     
     def clearing_loss(self, phi_dot_stn, power = 2):
@@ -541,7 +527,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         optimizer.zero_grad()
         dW_st = torch.normal(0, np.sqrt(DT), (sample_size, T))
         dynamic_factory = DynamicFactory(dW_st)
-        loss_factory = LossFactory(dW_st)
+        loss_factory = LossFactory(dW_st, normalize = True)
         if train_type == "combo":
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo_model, clearing_known = clearing_known)
         else:
