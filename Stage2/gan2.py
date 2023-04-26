@@ -44,10 +44,10 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float()
+XI_LIST = torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #
 GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
-XI_NORM_LIST = torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)
+XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
 S = 1
 LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
@@ -255,7 +255,7 @@ class DynamicFactory():
             self.xi_stn[:,:,n] = XI_LIST[n] * self.W_st[:,1:]
         self.mu_bar = GAMMA_BAR * ALPHA ** 2 * S
     
-    def deep_hedging(self, gen_model, dis_model, use_true_mu = False, use_fast_var = False, combo_model = None, clearing_known = True):
+    def deep_hedging(self, gen_model, dis_model, use_true_mu = False, use_fast_var = False, combo_model = None, clearing_known = True, F_exact = None, H_exact = None):
         ## Setup variables
         phi_dot_stn = torch.zeros((self.n_sample, self.T, N_AGENT)).to(device = DEVICE)
         phi_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
@@ -276,6 +276,9 @@ class DynamicFactory():
             combo_offset = self.T * (N_AGENT - 1)
         else:
             combo_offset = self.T * N_AGENT
+        ## DEBUGGING!!!
+        if F_exact is not None and H_exact is not None:
+            phi_dot_stn, phi_stn, _, _, _ = self.ground_truth(F_exact, H_exact)
         for t in range(self.T):
             curr_t = torch.ones((self.n_sample, 1)).to(device = DEVICE)
             ## Populate phi_bar
@@ -307,6 +310,7 @@ class DynamicFactory():
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
             
             ## Generator output
+            """
             n_agent_itr = N_AGENT
             if clearing_known:
                 n_agent_itr -= 1
@@ -322,6 +326,7 @@ class DynamicFactory():
             if clearing_known:
                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
+            """
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def leading_order(self):
@@ -520,18 +525,18 @@ def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step,
 def slc(lst, idx):
     return lst[min(idx, len(lst) - 1)]
 
-def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True):
+def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True, normalize = False):
     assert train_type in ["generator", "discriminator", "combo"]
     loss_arr = []
     for itr in tqdm(range(epoch)):
         optimizer.zero_grad()
         dW_st = torch.normal(0, np.sqrt(DT), (sample_size, T))
         dynamic_factory = DynamicFactory(dW_st)
-        loss_factory = LossFactory(dW_st, normalize = True)
+        loss_factory = LossFactory(dW_st, normalize = normalize)
         if train_type == "combo":
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo_model, clearing_known = clearing_known)
         else:
-            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
         if train_type == "generator":
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) #+ loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         elif train_type == "discriminator":
@@ -569,7 +574,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
     loss_truth_final = float(loss_truth_final.data)
     return model, loss_arr, loss_truth_final
 
-def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver, combo_epoch, combo_sample, use_pretrained_combo, dis_loss = [1], use_true_mu = False, use_fast_var = False, total_rounds = 1, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, use_combo = False, clearing_known = True, train_args = None):
+def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver, combo_epoch, combo_sample, use_pretrained_combo, dis_loss = [1], use_true_mu = False, use_fast_var = False, total_rounds = 1, normalize_up_to = 0, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, use_combo = False, clearing_known = True, train_args = None):
     ## Generate Brownian paths for testing
     torch.manual_seed(seed)
     dW_st_eval = torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T))
@@ -585,7 +590,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
             if train_gen:
                 print("\tTraining Generator...")
-                generator, loss_arr_gen, loss_truth_final_gen = train_single(generator, discriminator, optimizer_gen, scheduler_gen, slc(gen_epoch, gan_round), slc(gen_sample, gan_round), use_true_mu, use_fast_var, "generator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_gen, curr_ts = curr_ts, clearing_known = clearing_known)
+                generator, loss_arr_gen, loss_truth_final_gen = train_single(generator, discriminator, optimizer_gen, scheduler_gen, slc(gen_epoch, gan_round), slc(gen_sample, gan_round), use_true_mu, use_fast_var, "generator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_gen, curr_ts = curr_ts, clearing_known = clearing_known, normalize = gan_round < normalize_up_to)
                 model_factory_gen.update_model(generator)
                 model_factory_gen.save_to_file(curr_ts)
                 visualize_loss(loss_arr_gen, gan_round, "generator", curr_ts, loss_truth_final_gen)
@@ -607,7 +612,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         dynamic_factory = DynamicFactory(dW_st_eval)
         loss_factory = LossFactory(dW_st_eval)
         if not use_combo:
-            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
         else:
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo, clearing_known = clearing_known)
         loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st) * S_VAL
@@ -638,11 +643,11 @@ train_args = {
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [10000],#[500, 1000, 10000],#[500, 1000, 10000, 50000],
+    "gen_epoch": [500, 1000, 1000, 1000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-3],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-2],
-    "dis_epoch": [10000],#[500, 1000, 10000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2, 1e-1, 1e-1, 1e-2],
+    "dis_epoch": [1000],#[500, 1000, 1000, 1000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
@@ -656,9 +661,10 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 15,
+    "total_rounds": 1,
+    "normalize_up_to": 0,
     "visualize_obs": 0,
-    "train_gen": True,
+    "train_gen": False,
     "train_dis": True,
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
