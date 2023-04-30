@@ -44,7 +44,7 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #
+XI_LIST = torch.tensor([3.01, 2.95, -2.86, 3.24, 2.80, -3.12, -2.88, 2.79, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
 GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
@@ -277,8 +277,8 @@ class DynamicFactory():
         else:
             combo_offset = self.T * N_AGENT
         ## DEBUGGING!!!
-        if F_exact is not None and H_exact is not None:
-            phi_dot_stn, phi_stn, _, _, _ = self.ground_truth(F_exact, H_exact)
+#         if F_exact is not None and H_exact is not None:
+#             phi_dot_stn, phi_stn, _, _, _ = self.ground_truth(F_exact, H_exact)
         for t in range(self.T):
             curr_t = torch.ones((self.n_sample, 1)).to(device = DEVICE)
             ## Populate phi_bar
@@ -310,7 +310,6 @@ class DynamicFactory():
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
             
             ## Generator output
-            """
             n_agent_itr = N_AGENT
             if clearing_known:
                 n_agent_itr -= 1
@@ -326,7 +325,6 @@ class DynamicFactory():
             if clearing_known:
                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
-            """
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def leading_order(self):
@@ -643,11 +641,11 @@ train_args = {
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [500, 1000, 1000, 1000],#[500, 1000, 10000, 50000],
+    "gen_epoch": [10000],#[500, 1000, 1000, 1000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-1, 1e-1, 1e-2],
-    "dis_epoch": [1000],#[500, 1000, 1000, 1000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2], #[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-2],
+    "dis_epoch": [10000],#[500, 1000, 1000, 2000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
@@ -661,10 +659,10 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 1,
+    "total_rounds": 10,
     "normalize_up_to": 0,
     "visualize_obs": 0,
-    "train_gen": False,
+    "train_gen": True,
     "train_dis": True,
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
