@@ -44,7 +44,7 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3.01, 2.95, -2.86, 3.24, 2.80, -3.12, -2.88, 2.79, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
+XI_LIST = torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
 GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
@@ -641,11 +641,11 @@ train_args = {
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [5000],#[500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
+    "gen_epoch": [1000],#[500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-1],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [5000],#[500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "dis_epoch": [1000],#[500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
@@ -653,8 +653,8 @@ train_args = {
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [5000],
-    "dis_sample": [5000],
+    "gen_sample": [300],
+    "dis_sample": [300],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
