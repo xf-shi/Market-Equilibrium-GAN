@@ -39,13 +39,13 @@ BETA = 1 #0.5
 # GAMMA_1 = GAMMA_BAR*(KAPPA+1)/KAPPA
 # GAMMA_2 = GAMMA_BAR*(KAPPA+1)
 GAMMA_1 = 1
-GAMMA_2 = 2
+GAMMA_2 = 1#2
 
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
-GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
+XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
+GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
@@ -68,6 +68,10 @@ XI_LIST_NP = XI_LIST.numpy().reshape((1, N_AGENT))
 GAMMA_BAR_NP = GAMMA_BAR.cpu().numpy()
 GAMMA_MAX_NP = GAMMA_MAX.cpu().numpy()
 ###
+
+## Load G
+with open("eva.txt", "r") as f:
+    G_MAP = torch.tensor([float(x.strip()) for x in f.readlines()]).to(device=DEVICE)
 
 def get_W(dW_st, W_s0 = None):
     n_sample = dW_st.shape[0]
@@ -327,8 +331,43 @@ class DynamicFactory():
                 phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
-    def leading_order(self):
-        pass
+    def g_vec(self, x, q = 3/2):
+        x_ind = torch.round((torch.abs(x) + 0) / 50 * 500000).long()
+        x_inbound = (torch.abs(x) <= 50) + 0
+        x_outbound = -torch.sign(x) * q * (q - 1) ** (-(q - 1) / q) * torch.abs(x) ** (2 * (q - 1) / q)
+        return torch.sign(x) * G_MAP[x_ind * x_inbound] + x_outbound * (1 - x_inbound)
+        
+    def leading_order(self, power = 1.5):
+        assert N_AGENT == 2
+        phi_dot_stn = torch.zeros((self.n_sample, self.T, N_AGENT)).to(device = DEVICE)
+        phi_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
+        phi_stn[:,0,:] = S * GAMMA_BAR / GAMMA_LIST
+        delta_phi_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
+        mu_st = torch.zeros((self.n_sample, self.T)).to(device = DEVICE)
+        sigma_st = torch.zeros((self.n_sample, self.T)).to(device = DEVICE)
+        stock_st = torch.zeros((self.n_sample, self.T + 1)).to(device = DEVICE)
+        phi_bar_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
+        g_tilda_prime_0 = -1.771
+        for t in range(self.T + 1):
+            for n in range(N_AGENT):
+                phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
+        for t in range(self.T):
+            outer = -torch.sign(delta_phi_stn[:,t,:-1]) * (power * GAMMA_LIST[:-1] * XI_LIST[0] ** 4 / 8 / LAM / ALPHA ** 2) ** (1 / (power + 2))
+            inner = 2 ** ((power - 1) / (power + 2)) * ((power * GAMMA_LIST[:-1] * ALPHA ** 2 / LAM) ** (1 / (power + 2))) * ((ALPHA / XI_LIST[0]) ** (2 * power / (power + 2))) * delta_phi_stn[:,t,:-1]
+            phi_dot = outer * torch.abs(self.g_vec(inner, q = power)) ** (1 / (power - 1))
+            d_delta_phi = phi_dot * DT + XI_LIST[0] / ALPHA * self.dW_st[:,t].reshape((self.n_sample, 1))
+            delta_phi_stn[:,t+1,:-1] = delta_phi_stn[:,t,:-1] + d_delta_phi
+            phi_stn[:,t+1,:-1] = delta_phi_stn[:,t+1,:-1] + phi_bar_stn[:,t+1,:-1]
+            phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
+            delta_phi_stn[:,t+1,-1] = phi_stn[:,t+1,-1] - phi_bar_stn[:,t+1,-1]
+            phi_dot_stn[:,t,:] = phi_stn[:,t+1,:] - phi_stn[:,t,:]
+            
+            sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * LAM ** (2 / (power + 2)) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
+            mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
+            stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
+        target = BETA * TR + ALPHA * self.W_st[:,-1]
+        stock_st = stock_st + (target - stock_st[:,-1]).reshape((self.n_sample, 1))
+        return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def ground_truth(self, F_exact, H_exact):
         ## Setup variables
@@ -559,7 +598,10 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
             else:
                 model_factory.update_model(combo_model)
             model_factory.save_to_file(curr_ts)
-    phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.ground_truth(F_exact, H_exact)
+    if utility_power == 2:
+        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.ground_truth(F_exact, H_exact)
+    else:
+        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.leading_order(power = utility_power)
     if train_type == "generator":
         model = generator
         loss_truth_final = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
@@ -577,6 +619,9 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
     torch.manual_seed(seed)
     dW_st_eval = torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T))
     F_exact, H_exact = get_FH_exact()
+    benchmark_name = "Ground Truth"
+    if utility_power != 2:
+        benchmark_name = "Leading Order"
     ## Begin training
     for gan_round in range(total_rounds):
         print(f"Round #{gan_round + 1}:")
@@ -616,16 +661,19 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
         loss_stock = loss_factory.stock_loss(stock_st, power = slc(dis_loss, gan_round))
 
-        phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
+        if utility_power == 2:
+            phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
+        else:
+            phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
         loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
         loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
         ## Visualize
         comment = f"Model Utility Loss = {loss_utility:.2e}, Stock Loss = {loss_stock:.2e}\nGround Truth Utility Loss = {loss_truth_utility:.2e}, Stock Loss = {loss_truth_stock:.2e}\n"
-        visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", "Ground Truth"], comment = comment)
-        visualize_comparison(TIMESTAMPS, [phi_stn[visualize_obs,1:], phi_stn_truth[visualize_obs,1:]], gan_round, curr_ts, "phi", ["Model", "Ground Truth"], comment = comment)
-        visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", "Ground Truth"], comment = comment)
-        visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", "Ground Truth"], comment = comment)
-        visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", "Ground Truth"], comment = comment)
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [phi_stn[visualize_obs,1:], phi_stn_truth[visualize_obs,1:]], gan_round, curr_ts, "phi", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", benchmark_name], comment = comment)
         ## Save logs to file
         if not use_combo:
             write_logs([prev_ts_gen, curr_ts], train_args)
@@ -641,11 +689,11 @@ train_args = {
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [10, 500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
+    "gen_epoch": [500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
     "dis_lr": [1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [10, 500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
+    "dis_epoch": [500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "utility_power": 1.5,
     "dis_decay": 0.1,
@@ -654,8 +702,8 @@ train_args = {
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [1000],
-    "dis_sample": [1000],
+    "gen_sample": [128],
+    "dis_sample": [128],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
