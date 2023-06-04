@@ -360,7 +360,7 @@ class DynamicFactory():
             phi_stn[:,t+1,:-1] = delta_phi_stn[:,t+1,:-1] + phi_bar_stn[:,t+1,:-1]
             phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
             delta_phi_stn[:,t+1,-1] = phi_stn[:,t+1,-1] - phi_bar_stn[:,t+1,-1]
-            phi_dot_stn[:,t,:] = phi_stn[:,t+1,:] - phi_stn[:,t,:]
+            phi_dot_stn[:,t,:] = (phi_stn[:,t+1,:] - phi_stn[:,t,:]) / DT
             
             sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * LAM ** (2 / (power + 2)) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
             mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
@@ -692,7 +692,7 @@ train_args = {
     "gen_epoch": [500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "dis_lr": [1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
     "dis_epoch": [500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "utility_power": 1.5,
