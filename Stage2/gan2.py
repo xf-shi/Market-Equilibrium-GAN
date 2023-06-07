@@ -362,7 +362,7 @@ class DynamicFactory():
             delta_phi_stn[:,t+1,-1] = phi_stn[:,t+1,-1] - phi_bar_stn[:,t+1,-1]
             phi_dot_stn[:,t,:] = phi_stn[:,t+1,:] - phi_stn[:,t,:]
             
-            sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * LAM ** (2 / (power + 2)) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
+            sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
             mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
         target = BETA * TR + ALPHA * self.W_st[:,-1]
