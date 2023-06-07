@@ -39,7 +39,7 @@ BETA = 1 #0.5
 # GAMMA_1 = GAMMA_BAR*(KAPPA+1)/KAPPA
 # GAMMA_2 = GAMMA_BAR*(KAPPA+1)
 GAMMA_1 = 1
-GAMMA_2 = 1#2
+GAMMA_2 = 2
 
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
@@ -360,7 +360,7 @@ class DynamicFactory():
             phi_stn[:,t+1,:-1] = delta_phi_stn[:,t+1,:-1] + phi_bar_stn[:,t+1,:-1]
             phi_stn[:,t+1,-1] = S - torch.sum(phi_stn[:,t+1,:-1], axis = 1)
             delta_phi_stn[:,t+1,-1] = phi_stn[:,t+1,-1] - phi_bar_stn[:,t+1,-1]
-            phi_dot_stn[:,t,:] = phi_stn[:,t+1,:] - phi_stn[:,t,:]
+            phi_dot_stn[:,t,:] = (phi_stn[:,t+1,:] - phi_stn[:,t,:]) / DT
             
             sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
             mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
@@ -689,11 +689,11 @@ train_args = {
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
+    "gen_epoch": [1000],#[500, 1000, 1000, 5000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "dis_epoch": [1000],#[500, 1000, 1000, 5000],#[500, 2000, 10000, 50000],
     "dis_loss": [1],
     "utility_power": 1.5,
     "dis_decay": 0.1,
@@ -702,8 +702,8 @@ train_args = {
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [128],
-    "dis_sample": [128],
+    "gen_sample": [1000],
+    "dis_sample": [1000],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
