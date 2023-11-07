@@ -432,7 +432,7 @@ class LossFactory():
         return torch.mean(loss)
 
     def regularize_loss(self, data, C = 1e-3):
-        return C * torch.mean(data)
+        return C * torch.mean(torch.abs(data))
 
 ## Write training logs to file
 def write_logs(ts_lst, train_args):
@@ -581,7 +581,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         if train_type == "generator":
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3)
         elif train_type == "discriminator":
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
+            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(sigma_st, C = 1e-3)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
@@ -693,26 +693,26 @@ train_args = {
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [1000],#[500, 1000, 1000, 1000],#[500, 1000, 10000, 50000],
+    "gen_epoch": [500, 1000, 1000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 100000,
     "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [1000],#[500, 1000, 1000, 1000],#[500, 2000, 10000, 50000],
-    "dis_loss": [2],
-    "utility_power": 1.5,
+    "dis_epoch": [500, 1000, 1000],#[500, 2000, 10000, 50000],
+    "dis_loss": [2, 2, 1],
+    "utility_power": 2,
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
     "combo_lr": [1e-3],
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [3000],#[128],#[3000, 1000],
-    "dis_sample": [3000],#[128],#[3000, 1000],
+    "gen_sample": [128],#[3000, 1000],
+    "dis_sample": [128],#[3000, 1000],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 1,#10,
+    "total_rounds": 10,#10,
     "normalize_up_to": 0,
     "visualize_obs": 0,
     "train_gen": True,
