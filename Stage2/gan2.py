@@ -27,7 +27,7 @@ else:
 S_VAL = 1 #245714618646 #1#
 
 TR = 1#20
-T = 100
+T = 500
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
 N_SAMPLE = 300 #128
@@ -52,7 +52,7 @@ XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 S = 1
 LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
 
-S_TERMINAL = 1#1/3 #245.47
+S_TERMINAL = TR#1/3 #245.47
 S_INITIAL = 0 #250 #0#
 
 assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-1]
@@ -407,7 +407,7 @@ class LossFactory():
     def utility_loss(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
         loss = 0
         for n in range(N_AGENT):
-            loss_curr = (torch.mean(-torch.sum(mu_st * phi_stn[:,1:,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,1:,n] + self.W_st[:,1:] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 1)) / self.T) / N_AGENT
+            loss_curr = (torch.mean(-torch.sum(mu_st * phi_stn[:,:-1,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 1)) / self.T) / N_AGENT
             if self.normalize:
                 loss_curr = loss_curr * XI_NORM_LIST[n]
             loss += loss_curr
@@ -695,8 +695,8 @@ train_args = {
     "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
     "gen_epoch": [500, 1000, 1000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
-    "gen_scheduler_step": 100000,
-    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "gen_scheduler_step": 10000,
+    "dis_lr": [1e-2, 1e-2, 1e-1, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
     "dis_epoch": [500, 1000, 1000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 1],
     "utility_power": 2,
@@ -706,13 +706,13 @@ train_args = {
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [128],#[3000, 1000],
-    "dis_sample": [128],#[3000, 1000],
+    "gen_sample": [1000],#[3000, 1000],
+    "dis_sample": [1000],#[3000, 1000],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,#10,
+    "total_rounds": 5,#10,
     "normalize_up_to": 0,
     "visualize_obs": 0,
     "train_gen": True,
