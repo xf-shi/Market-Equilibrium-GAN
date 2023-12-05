@@ -27,10 +27,10 @@ else:
 S_VAL = 1 #245714618646 #1#
 
 TR = 1#20
-T = 500
+T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
-N_SAMPLE = 300 #128
+N_SAMPLE = 1000 #128
 ALPHA = 1 #1 #
 BETA = 1 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
@@ -44,15 +44,15 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
+XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([3, -2, 2, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
+GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
 S = 1
 LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
 
-S_TERMINAL = TR#1/3 #245.47
+S_TERMINAL = 1 #1/3 #245.47
 S_INITIAL = 0 #250 #0#
 
 assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-1]
@@ -291,9 +291,9 @@ class DynamicFactory():
             delta_phi_stn = phi_stn[:,t,:] - phi_bar_stn[:,t,:]
             ## Discriminator - Sigma output
             if not use_fast_var:
-                x_dis = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
+                x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
             else:
-                x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((delta_phi_stn, curr_t), dim=1) #
+                x_dis = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #curr_t.reshape((self.n_sample, 1)) #
             if combo_model is None:
                 sigma_s = torch.abs(dis_model((t, x_dis)).reshape((-1,)))
             else:
@@ -318,7 +318,7 @@ class DynamicFactory():
             if clearing_known:
                 n_agent_itr -= 1
             if not use_fast_var:
-                x_gen = torch.cat((phi_stn[:,t,n].reshape((self.n_sample, 1)), mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
+                x_gen = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
             else:
                 x_gen = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
             if combo_model is None:
@@ -525,9 +525,9 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
 def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False, clearing_known = True):
     retrain = not use_pretrained_gen
     if not use_fast_var:
-        input_dim = 2 + 1 + 1#2 + N_AGENT
-    else:
         input_dim = 2 + N_AGENT
+    else:
+        input_dim = 2 + N_AGENT #2 + N_AGENT
     n_model = T #T * (N_AGENT - 1)
 #     if not clearing_known:
 #         n_model += T
@@ -543,10 +543,10 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
         n_model += T
     retrain = not use_pretrained_dis
     if not use_fast_var:
-        input_dim = 2 + N_AGENT
+        input_dim = 1 + N_AGENT #2 + N_AGENT
     else:
-        input_dim = 1 + N_AGENT
-    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T)
+        input_dim = 2 + N_AGENT
+    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = 0)
     return model_factory
 
 def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver = "Adam", use_pretrained_combo = True, use_true_mu = False, use_fast_var = False, clearing_known = True):
@@ -692,12 +692,12 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2],
-    "gen_epoch": [500, 1000, 1000],#[500, 1000, 10000, 50000],
+    "gen_lr": [1e-2, 1e-2, 1e-2],
+    "gen_epoch": [500, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 10000,
-    "dis_lr": [1e-2, 1e-2, 1e-1, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [500, 1000, 1000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-1, 1e-2, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "dis_epoch": [500, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 1],
     "utility_power": 2,
     "dis_decay": 0.1,
@@ -712,7 +712,7 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 5,#10,
+    "total_rounds": 10,#10,
     "normalize_up_to": 0,
     "visualize_obs": 0,
     "train_gen": True,
