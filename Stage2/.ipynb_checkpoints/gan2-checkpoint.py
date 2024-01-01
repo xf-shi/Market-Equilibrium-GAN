@@ -44,13 +44,13 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([3, -2, 2, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([-1.94, -2.17, 2.14, 1.92, -2.24, 1.85, -1.92, 2.29, 2.20, -2.14]).float() #torch.tensor([2.01, 1.64, -1.41, 0.44, 1.55, 0.48, -1.79, 0.24, -1.5, -2.49]).float() #
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
+XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -3]).float() #torch.tensor([3, -2, 2, -3]).float() #
+GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
 S = 1
-LAM = 0.1 #1.08102e-10 * S_VAL #0.1 #
+LAM = 1e-2 #1.08102e-10 * S_VAL #0.1 #
 
 S_TERMINAL = 1 #1/3 #245.47
 S_INITIAL = 0 #250 #0#
@@ -95,9 +95,10 @@ def InverseRiccati(t, R, LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA
         dRH[n] = np.sum((GAMMA_LIST_NP[:,:-1] * (N_AGENT * ind[:-1] - 1) + GAMMA_MAX_NP) * XI_LIST_NP[:,:-1]) * const / N_AGENT - np.matmul(RF[n,:-1], RH[:-1].reshape((N_AGENT - 1, 1))) / LAM
     for n in range(N_AGENT - 1):
         for m in range(N_AGENT - 1):
-            ind = -1
             if n == m:
-                ind += N_AGENT
+                ind = N_AGENT - 1
+            else:
+                ind = -1
             dRF[n, m] = (GAMMA_LIST_NP[:, m] * ind + GAMMA_MAX_NP) * const ** 2 / N_AGENT - np.matmul(RF[n,:-1], RF[:-1,m]) / LAM
     dR = np.hstack((dRH.reshape((-1,)), dRF.reshape((-1,))))
     return dR
@@ -105,7 +106,7 @@ def InverseRiccati(t, R, LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA
 def get_FH_exact():
     R_0 = np.zeros(N_AGENT * (N_AGENT + 1))
     timestamps = np.linspace(0, TR, T + 1)[:-1]
-    res = solve_ivp(lambda t,R: InverseRiccati(t,R,LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA_LIST_NP, GAMMA_MAX_NP=GAMMA_MAX_NP, ALPHA=ALPHA, N_AGENT=N_AGENT, XI_LIST_NP=XI_LIST_NP), t_span=[0, TR], y0=R_0, t_eval=timestamps)
+    res = solve_ivp(lambda t,R: InverseRiccati(t,R,LAM=LAM, GAMMA_BAR_NP=GAMMA_BAR_NP, GAMMA_LIST_NP=GAMMA_LIST_NP, GAMMA_MAX_NP=GAMMA_MAX_NP, ALPHA=ALPHA, N_AGENT=N_AGENT, XI_LIST_NP=XI_LIST_NP), t_span=[0, TR], y0=R_0, t_eval=timestamps, rtol=1e-5, atol=1e-8)
     RH = torch.tensor(res.y[:N_AGENT]).to(device = DEVICE)
     RF = torch.tensor(res.y[N_AGENT:]).to(device = DEVICE)
     F_exact, H_exact = RF.float(), RH.float()
@@ -631,18 +632,22 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         print(f"Round #{gan_round + 1}:")
         curr_ts = datetime.now(tz=pytz.timezone("America/New_York")).strftime("%Y-%m-%d-%H-%M-%S")
         if not use_combo:
-            model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = use_pretrained_gen or not train_gen or gan_round > 0, use_fast_var = use_fast_var, clearing_known = clearing_known)
-            model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = use_pretrained_dis or not train_dis or gan_round > 0, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
-            generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
-            discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
             if train_gen:
                 print("\tTraining Generator...")
+                model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = False, use_fast_var = use_fast_var, clearing_known = clearing_known)
+                model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = use_pretrained_dis or not train_dis or gan_round > 0, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+                generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
+                discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
                 generator, loss_arr_gen, loss_truth_final_gen = train_single(generator, discriminator, optimizer_gen, scheduler_gen, slc(gen_epoch, gan_round), slc(gen_sample, gan_round), use_true_mu, use_fast_var, "generator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_gen, curr_ts = curr_ts, clearing_known = clearing_known, normalize = gan_round < normalize_up_to, utility_power = utility_power)
                 model_factory_gen.update_model(generator)
                 model_factory_gen.save_to_file(curr_ts)
                 visualize_loss(loss_arr_gen, gan_round, "generator", curr_ts, loss_truth_final_gen)
             if train_dis and (gan_round < total_rounds - 1 or last_round_dis):
                 print("\tTraining Discriminator...")
+                model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = use_pretrained_gen or not train_gen or gan_round > 0, use_fast_var = use_fast_var, clearing_known = clearing_known)
+                model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = False, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+                generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
+                discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
                 discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts, clearing_known = clearing_known, utility_power = utility_power)
                 model_factory_dis.update_model(discriminator)
                 model_factory_dis.save_to_file(curr_ts)
@@ -692,12 +697,12 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-2, 1e-2],
-    "gen_epoch": [500, 1000, 10000],#[500, 1000, 10000, 50000],
+    "gen_lr": [1e-2, 1e-2, 1e-3],
+    "gen_epoch": [500, 1000, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 10000,
-    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-1, 1e-2, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [500, 1000, 10000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2, 1e-2, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "dis_epoch": [500, 1000, 10000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 1],
     "utility_power": 2,
     "dis_decay": 0.1,
@@ -706,14 +711,14 @@ train_args = {
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
     "combo_scheduler_step": 50000,
-    "gen_sample": [1000],#[3000, 1000],
-    "dis_sample": [1000],#[3000, 1000],
+    "gen_sample": [128],#[3000, 1000],
+    "dis_sample": [128],#[3000, 1000],
     "combo_sample": [128, 128],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,#10,
-    "normalize_up_to": 0,
+    "total_rounds": 10,
+    "normalize_up_to": 100,
     "visualize_obs": 0,
     "train_gen": True,
     "train_dis": True,
