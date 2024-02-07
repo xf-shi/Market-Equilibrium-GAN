@@ -26,7 +26,7 @@ else:
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
 
-TR = 0.4 #20
+TR = 0.4 #0.4 for 10 agents #20
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
@@ -50,7 +50,9 @@ GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).floa
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
 S = 1
-LAM = 1e-2 #1.08102e-10 * S_VAL #0.1 #
+## 1e-2: power 2 10 agents, power 1.5 2 agents
+## 1e-3: poewr 2 2 agents
+LAM = 1e-2 #1e-2 for 10 agents #1.08102e-10 * S_VAL #0.1 #
 
 S_TERMINAL = 1 #1/3 #245.47
 S_INITIAL = 0 #250 #0#
@@ -704,7 +706,7 @@ train_args = {
     "dis_lr": [1e-2, 1e-2, 1e-2, 1e-3],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
     "dis_epoch": [500, 1000, 10000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 1],
-    "utility_power": 2,
+    "utility_power": 1.5, #2,
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
     "combo_lr": [1e-3],
