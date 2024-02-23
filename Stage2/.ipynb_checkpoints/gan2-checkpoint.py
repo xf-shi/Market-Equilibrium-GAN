@@ -51,7 +51,7 @@ XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
 S = 1
 ## 1e-2: power 2 10 agents, power 1.5 2 agents
-## 1e-3: poewr 2 2 agents
+## 1e-3: power 2 2 agents
 LAM = 1e-2 #1e-2 for 10 agents #1.08102e-10 * S_VAL #0.1 #
 
 S_TERMINAL = 1 #1/3 #245.47
@@ -633,6 +633,18 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
     for gan_round in range(total_rounds):
         print(f"Round #{gan_round + 1}:")
         curr_ts = datetime.now(tz=pytz.timezone("America/New_York")).strftime("%Y-%m-%d-%H-%M-%S")
+        # if gan_round == 0:
+        #     dynamic_factory = DynamicFactory(dW_st_eval)
+        #     if utility_power == 2:
+        #         phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
+        #     else:
+        #         phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
+        #     torch.save(dW_st_eval, "ground_truth/dW.pt")
+        #     torch.save(phi_dot_stn_truth, "ground_truth/phi_dot_stn_truth.pt")
+        #     torch.save(phi_stn_truth, "ground_truth/phi_stn_truth.pt")
+        #     torch.save(mu_st_truth, "ground_truth/mu_st_truth.pt")
+        #     torch.save(sigma_st_truth, "ground_truth/sigma_st_truth.pt")
+        #     torch.save(stock_st_truth, "ground_truth/stock_st_truth.pt")
         if not use_combo:
             if train_gen:
                 print("\tTraining Generator...")
@@ -676,6 +688,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
         else:
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
+            
         loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
         loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
         ## Visualize
@@ -706,7 +719,7 @@ train_args = {
     "dis_lr": [1e-2, 1e-2, 1e-2, 1e-3],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
     "dis_epoch": [500, 1000, 10000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 1],
-    "utility_power": 1.5, #2,
+    "utility_power": 2, #2,
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
     "combo_lr": [1e-3],
