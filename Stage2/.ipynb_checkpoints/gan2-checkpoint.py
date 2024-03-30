@@ -262,7 +262,7 @@ class DynamicFactory():
             self.xi_stn[:,:,n] = XI_LIST[n] * self.W_st[:,1:]
         self.mu_bar = GAMMA_BAR * ALPHA ** 2 * S
     
-    def deep_hedging(self, gen_model, dis_model, use_true_mu = False, use_fast_var = False, combo_model = None, clearing_known = True, F_exact = None, H_exact = None):
+    def deep_hedging(self, gen_model, dis_model, use_true_mu = False, use_fast_var = False, combo_model = None, clearing_known = True, F_exact = None, H_exact = None, perturb_musigma = False, perturb_phidot = False):
         ## Setup variables
         phi_dot_stn = torch.zeros((self.n_sample, self.T, N_AGENT)).to(device = DEVICE)
         phi_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
@@ -292,6 +292,13 @@ class DynamicFactory():
             for n in range(N_AGENT):
                 phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
             delta_phi_stn = phi_stn[:,t,:] - phi_bar_stn[:,t,:]
+            ## Mu Sigma perturbations
+            perturb_sd = 2.0 #* ((t+1) * DT) ** 0.5
+            perturb_phidot_sd = 100.0
+            sigma_perturb = torch.normal(0.0, perturb_sd, (self.n_sample,))
+            mu_perturb = torch.normal(0.0, perturb_sd, (self.n_sample,))
+            phidot_perturb = torch.normal(0.0, perturb_phidot_sd, (self.n_sample,))
+            # torch.normal(0, np.sqrt(DT), (sample_size, T))
             ## Discriminator - Sigma output
             if not use_fast_var:
                 x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
@@ -311,9 +318,12 @@ class DynamicFactory():
                 if not use_fast_var:
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
-                    x_mu = torch.cat((delta_phi_stn, curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
+                    x_mu = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
                 mu_s = dis_model((self.T + t, x_mu)).reshape((-1,))
             mu_st[:,t] = mu_s
+            if perturb_musigma:
+                sigma_st[:,t] += sigma_perturb
+                mu_st[:,t] += mu_perturb
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
             
             ## Generator output
@@ -328,6 +338,8 @@ class DynamicFactory():
                 phi_dot_stn[:,t,:n_agent_itr] = gen_model((t, x_gen))
             else:
                 phi_dot_stn[:,t,:n_agent_itr] = combo_model((t, x_gen))
+            if perturb_phidot:
+                phi_dot_stn[:,t,:] += perturb_phidot
             phi_stn[:,t+1,:n_agent_itr] = phi_stn[:,t,:n_agent_itr] + phi_dot_stn[:,t,:n_agent_itr] * DT
             if clearing_known:
                 phi_dot_stn[:,t,-1] = -torch.sum(phi_dot_stn[:,t,:-1], axis = 1)
@@ -580,11 +592,11 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         if train_type == "combo":
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo_model, clearing_known = clearing_known)
         else:
-            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact, perturb_musigma = False, perturb_phidot = False) #perturb_musigma = train_type == "generator", perturb_phidot = train_type == "discriminator"
         if train_type == "generator":
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3)
         elif train_type == "discriminator":
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(sigma_st, C = 1e-3)
+            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
@@ -740,7 +752,7 @@ train_args = {
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
     "use_pretrained_combo": True,
-    "use_true_mu": True,
+    "use_true_mu": False,
     "use_fast_var": True,
     "last_round_dis": True,
     "seed": 0,
