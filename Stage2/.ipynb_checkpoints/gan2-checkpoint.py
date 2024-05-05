@@ -155,7 +155,8 @@ class Net(nn.Module):
         for i in range(len(self.layer_lst) - 1):
             x = self.layer_lst[i](x)
 #            x = self.bn[i](x)
-            x = F.relu(x)
+            # x = F.relu(x)
+            x = torch.tanh(x)
         return self.layer_lst[-1](x)
 
 ## Model wrapper
@@ -303,13 +304,13 @@ class DynamicFactory():
             if not use_fast_var:
                 x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
             else:
-                x_dis = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #curr_t.reshape((self.n_sample, 1)) #
+                x_dis = curr_t.reshape((self.n_sample, 1)) #torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #curr_t.reshape((self.n_sample, 1)) #
             if combo_model is None:
-                sigma_s = torch.abs(dis_model((t, x_dis)).reshape((-1,)))
+                sigma_s = torch.abs(dis_model((t, x_dis)).view((-1,)))
             else:
                 sigma_s = torch.abs(combo_model((combo_offset + t, x_dis)).reshape((-1,)))
             sigma_st[:,t] = sigma_s
-            fast_var_stn = (phi_stn.clone()[:,t,:] * sigma_s.reshape((self.n_sample, 1)) + self.xi_stn[:,t,:]) * sigma_s.reshape((self.n_sample, 1))
+            # fast_var_stn = (phi_stn.clone()[:,t,:] * sigma_s.reshape((self.n_sample, 1)) + self.xi_stn[:,t,:]) * sigma_s.reshape((self.n_sample, 1))
             
             ## Discriminator - Mu output
             if use_true_mu:
@@ -319,7 +320,7 @@ class DynamicFactory():
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
                     x_mu = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
-                mu_s = dis_model((self.T + t, x_mu)).reshape((-1,))
+                mu_s = dis_model((self.T + t, x_mu)).view((-1,))
             mu_st[:,t] = mu_s
             if perturb_musigma:
                 sigma_st[:,t] += sigma_perturb
@@ -331,7 +332,7 @@ class DynamicFactory():
             if clearing_known:
                 n_agent_itr -= 1
             if not use_fast_var:
-                x_gen = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
+                x_gen = torch.cat((mu_st[:,t].view((self.n_sample, 1)), sigma_st[:,t].view((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
             else:
                 x_gen = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, mu_s.reshape((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
             if combo_model is None:
@@ -422,11 +423,22 @@ class LossFactory():
     def utility_loss(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
         loss = 0
         for n in range(N_AGENT):
-            loss_curr = (torch.mean(-torch.sum(mu_st * phi_stn[:,:-1,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 1)) / self.T) / N_AGENT
-            if self.normalize:
-                loss_curr = loss_curr * XI_NORM_LIST[n]
+            loss_curr = self.utility_loss_single(phi_dot_stn, phi_stn, mu_st, sigma_st, n, power = power)
             loss += loss_curr
         return loss
+
+    def utility_loss_single(self, phi_dot_stn, phi_stn, mu_st, sigma_st, n, power = 2):
+        loss_curr = (torch.mean(-torch.sum(mu_st * phi_stn[:,:-1,n], axis = 1) + GAMMA_LIST[n] / 2 * torch.sum((sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n]) ** 2, axis = 1) + LAM / 2 * torch.sum(torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 1)) / self.T) / N_AGENT
+        if self.normalize:
+            loss_curr = loss_curr * XI_NORM_LIST[n]
+        return loss_curr
+
+    def utility_loss_matrix(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
+        loss_arr = torch.zeros(self.T)
+        for n in range(N_AGENT):
+            loss_curr = (torch.mean(-(mu_st * phi_stn[:,:-1,n]) + GAMMA_LIST[n] / 2 * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n]) ** 2 + LAM / 2 * torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 0) / 1) / 1
+            loss_arr += loss_curr
+        return loss_arr
     
     def clearing_loss(self, phi_dot_stn, power = 2):
         loss = torch.abs(torch.sum(phi_dot_stn, axis = 2)) ** power
@@ -435,6 +447,12 @@ class LossFactory():
     def clearing_loss_phi(self, phi_stn, power = 2):
         loss = torch.abs(torch.sum(phi_stn, axis = 2) - S) ** power
         return torch.mean(loss)
+
+    def clearing_loss_delta(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 0.01):
+        loss_1 = self.utility_loss_matrix(phi_dot_stn, phi_stn, mu_st, sigma_st, power = power)
+        loss_2 = self.utility_loss_matrix(phi_dot_stn, phi_stn + delta, mu_st, sigma_st, power = power)
+        loss = torch.mean(((loss_2 - loss_1) / delta) ** 2)
+        return loss
     
     def stock_loss(self, stock_st, power = 2):
         target = BETA * TR + ALPHA * self.W_st[:,-1]
@@ -447,7 +465,7 @@ class LossFactory():
         return torch.mean(loss)
 
     def regularize_loss(self, data, C = 1e-3):
-        return C * torch.mean(torch.abs(data))
+        return C * torch.mean(torch.abs(data) ** 2)
 
 ## Write training logs to file
 def write_logs(ts_lst, train_args):
@@ -540,7 +558,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
 def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False, clearing_known = True):
     retrain = not use_pretrained_gen
     if not use_fast_var:
-        input_dim = 2 + N_AGENT
+        input_dim = 4 #+ N_AGENT #2 + N_AGENT
     else:
         input_dim = 2 + N_AGENT #2 + N_AGENT
     n_model = T #T * (N_AGENT - 1)
@@ -558,10 +576,10 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
         n_model += T
     retrain = not use_pretrained_dis
     if not use_fast_var:
-        input_dim = 1 + N_AGENT #2 + N_AGENT
+        input_dim = 2 + N_AGENT #2 + N_AGENT
     else:
         input_dim = 2 + N_AGENT
-    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = 0)
+    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T)
     return model_factory
 
 def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver = "Adam", use_pretrained_combo = True, use_true_mu = False, use_fast_var = False, clearing_known = True):
@@ -594,9 +612,9 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         else:
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact, perturb_musigma = False, perturb_phidot = False) #perturb_musigma = train_type == "generator", perturb_phidot = train_type == "discriminator"
         if train_type == "generator":
-            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3)
+            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         elif train_type == "discriminator":
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss_delta(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
@@ -724,13 +742,13 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2, 1e-2, 1e-3, 1e-3],
+    "gen_lr": [1e-2, 1e-2, 1e-3],
     "gen_epoch": [500, 1000, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 10000,
-    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
+    "dis_lr": [1e-2, 1e-2, 1e-3],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
     "dis_epoch": [500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
-    "dis_loss": [2, 2, 1],
+    "dis_loss": [2, 2, 2],
     "utility_power": 2, #2,
     "dis_decay": 0.1,
     "dis_scheduler_step": 50000,
@@ -744,7 +762,7 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,
+    "total_rounds": 30,
     "normalize_up_to": 100,
     "visualize_obs": 0,
     "train_gen": True,
