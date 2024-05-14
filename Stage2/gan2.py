@@ -448,10 +448,21 @@ class LossFactory():
         loss = torch.abs(torch.sum(phi_stn, axis = 2) - S) ** power
         return torch.mean(loss)
 
-    def clearing_loss_delta(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 0.01):
+    def clearing_loss_same_delta(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 0.01):
         loss_1 = self.utility_loss_matrix(phi_dot_stn, phi_stn, mu_st, sigma_st, power = power)
         loss_2 = self.utility_loss_matrix(phi_dot_stn, phi_stn + delta, mu_st, sigma_st, power = power)
         loss = torch.mean(((loss_2 - loss_1) / delta) ** 2)
+        return loss
+
+    def clearing_loss_delta(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 1e-3):
+        loss_1 = self.utility_loss_matrix(phi_dot_stn, phi_stn, mu_st, sigma_st, power = power)
+        delta_dot = torch.ones((self.n_sample, self.T + 1, N_AGENT)) * delta
+        delta_dot[:,0,:] = 0
+        delta_cum = delta_dot.cumsum(dim = 1)
+        loss_2 = self.utility_loss_matrix(phi_dot_stn + delta_dot[:,1:,:], phi_stn + delta_cum, mu_st, sigma_st, power = power)
+        loss_1_cum = torch.flip(torch.flip(loss_1, dims = [0]).cumsum(dim = 0), dims = [0])
+        loss_2_cum = torch.flip(torch.flip(loss_2, dims = [0]).cumsum(dim = 0), dims = [0])
+        loss = torch.mean(((loss_2_cum - loss_1_cum) / delta_cum.mean(dim = 0).mean(dim = 1)[1:]) ** 2)
         return loss
     
     def stock_loss(self, stock_st, power = 2):
