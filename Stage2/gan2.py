@@ -454,7 +454,13 @@ class LossFactory():
         loss = torch.mean(((loss_2 - loss_1) / delta) ** 2)
         return loss
 
-    def clearing_loss_delta(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 1e-3):
+    def clearing_loss_delta(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 0.01):
+        loss_1 = self.utility_loss_matrix(phi_dot_stn, phi_stn, mu_st, sigma_st, power = power)
+        loss_2 = self.utility_loss_matrix(phi_dot_stn + delta, phi_stn + delta, mu_st, sigma_st, power = power)
+        loss = torch.mean(((loss_2 - loss_1) / delta) ** 2)
+        return loss
+
+    def clearing_loss_delta_accum(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, delta = 1e-3):
         loss_1 = self.utility_loss_matrix(phi_dot_stn, phi_stn, mu_st, sigma_st, power = power)
         delta_dot = torch.ones((self.n_sample, self.T + 1, N_AGENT)) * delta
         delta_dot[:,0,:] = 0
