@@ -470,6 +470,16 @@ class LossFactory():
         loss_2_cum = torch.flip(torch.flip(loss_2, dims = [0]).cumsum(dim = 0), dims = [0])
         loss = torch.mean(((loss_2_cum - loss_1_cum) / delta_cum.mean(dim = 0).mean(dim = 1)[1:]) ** 2)
         return loss
+
+    def clearing_loss_y(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
+        ydot_stn = torch.zeros((self.n_sample, self.T, N_AGENT))
+        for n in range(N_AGENT):
+            ydot_stn[:,:,n] = mu_st - GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n])
+        y_stn = torch.flip(torch.flip(ydot_stn, dims = [1]).cumsum(dim = 1), dims = [1])
+        y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
+        loss_st = torch.sum(y_prime_stn, dim = 2)
+        loss = torch.sum(loss_st ** 2) / self.n_sample
+        return loss
     
     def stock_loss(self, stock_st, power = 2):
         target = BETA * TR + ALPHA * self.W_st[:,-1]
@@ -631,7 +641,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         if train_type == "generator":
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         elif train_type == "discriminator":
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss_delta(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
