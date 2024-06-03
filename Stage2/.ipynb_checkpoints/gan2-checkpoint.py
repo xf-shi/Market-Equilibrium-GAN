@@ -30,7 +30,7 @@ TR = 0.2 #0.4 for 10 agents #20
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
-N_SAMPLE = 128 #128
+N_SAMPLE = 500 #128 #128
 ALPHA = 1 #1 #
 BETA = 1 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
@@ -474,11 +474,16 @@ class LossFactory():
     def clearing_loss_y(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
         ydot_stn = torch.zeros((self.n_sample, self.T, N_AGENT))
         for n in range(N_AGENT):
-            ydot_stn[:,:,n] = mu_st - GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n])
-        y_stn = torch.flip(torch.flip(ydot_stn, dims = [1]).cumsum(dim = 1), dims = [1])
-        y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
+            # mu_st += 1 / N_AGENT * GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn.clone()[:,:,n] + XI_LIST[n] * W_st)
+            ydot_stn[:,:,n] += mu_st - GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n])
+        y_stn = ydot_stn #torch.flip(torch.flip(ydot_stn, dims = [1]).cumsum(dim = 1), dims = [1])
+        # y_tn = torch.mean(y_stn, dim = 0)
+        y_prime_stn = y_stn #torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
         loss_st = torch.sum(y_prime_stn, dim = 2)
         loss = torch.sum(loss_st ** 2) / self.n_sample
+        # y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
+        # loss_st = torch.sum(y_prime_stn, dim = 2)
+        # loss = torch.sum(loss_st ** 2) / self.n_sample
         return loss
     
     def stock_loss(self, stock_st, power = 2):
