@@ -471,19 +471,20 @@ class LossFactory():
         loss = torch.mean(((loss_2_cum - loss_1_cum) / delta_cum.mean(dim = 0).mean(dim = 1)[1:]) ** 2)
         return loss
 
-    def clearing_loss_y(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
+    def clearing_loss_y(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, normalize = False):
         ydot_stn = torch.zeros((self.n_sample, self.T, N_AGENT))
+        const_stn = torch.ones((self.n_sample, self.T, N_AGENT))
+        const_stn = torch.flip(torch.flip(const_stn, dims = [1]).cumsum(dim = 1), dims = [1])
         for n in range(N_AGENT):
             # mu_st += 1 / N_AGENT * GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn.clone()[:,:,n] + XI_LIST[n] * W_st)
             ydot_stn[:,:,n] += mu_st - GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n])
-        y_stn = ydot_stn #torch.flip(torch.flip(ydot_stn, dims = [1]).cumsum(dim = 1), dims = [1])
+        y_stn = torch.flip(torch.flip(ydot_stn, dims = [1]).cumsum(dim = 1), dims = [1]) #/ const_stn
         # y_tn = torch.mean(y_stn, dim = 0)
-        y_prime_stn = y_stn #torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
-        loss_st = torch.sum(y_prime_stn, dim = 2)
-        loss = torch.sum(loss_st ** 2) / self.n_sample
-        # y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
-        # loss_st = torch.sum(y_prime_stn, dim = 2)
-        # loss = torch.sum(loss_st ** 2) / self.n_sample
+        y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
+        if True: #normalize:
+            y_prime_stn /= const_stn
+        loss_st = torch.sum(y_prime_stn / self.n_sample, dim = 2)
+        loss = torch.sum(loss_st ** 2)
         return loss
     
     def stock_loss(self, stock_st, power = 2):
@@ -631,7 +632,7 @@ def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step,
 def slc(lst, idx):
     return lst[min(idx, len(lst) - 1)]
 
-def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True, normalize = False, utility_power = 2):
+def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True, normalize = False, utility_power = 2, normalize_y = False):
     assert train_type in ["generator", "discriminator", "combo"]
     loss_arr = []
     for itr in tqdm(range(epoch)):
@@ -644,9 +645,9 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         else:
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact, perturb_musigma = False, perturb_phidot = False) #perturb_musigma = train_type == "generator", perturb_phidot = train_type == "discriminator"
         if train_type == "generator":
-            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
+            loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3) #+ loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         elif train_type == "discriminator":
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power, normalize = normalize_y) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
@@ -724,7 +725,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
                 model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = False, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
                 generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
                 discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
-                discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts, clearing_known = clearing_known, utility_power = utility_power)
+                discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts, clearing_known = clearing_known, utility_power = utility_power, normalize_y = gan_round < 3)
                 model_factory_dis.update_model(discriminator)
                 model_factory_dis.save_to_file(curr_ts)
                 visualize_loss(loss_arr_dis, gan_round, "discriminator", curr_ts, loss_truth_final_dis)
