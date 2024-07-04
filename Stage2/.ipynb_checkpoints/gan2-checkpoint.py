@@ -471,7 +471,7 @@ class LossFactory():
         loss = torch.mean(((loss_2_cum - loss_1_cum) / delta_cum.mean(dim = 0).mean(dim = 1)[1:]) ** 2)
         return loss
 
-    def clearing_loss_y(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, normalize = False):
+    def clearing_loss_y(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2, normalize = False, y_coef = 1):
         ydot_stn = torch.zeros((self.n_sample, self.T, N_AGENT))
         const_stn = torch.ones((self.n_sample, self.T, N_AGENT))
         const_stn = torch.flip(torch.flip(const_stn, dims = [1]).cumsum(dim = 1), dims = [1])
@@ -480,11 +480,10 @@ class LossFactory():
             ydot_stn[:,:,n] += mu_st - GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n])
         y_stn = torch.flip(torch.flip(ydot_stn, dims = [1]).cumsum(dim = 1), dims = [1]) #/ const_stn
         # y_tn = torch.mean(y_stn, dim = 0)
+        y_stn /= (const_stn ** 1)
         y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
-        if True: #normalize:
-            y_prime_stn /= const_stn
         loss_st = torch.sum(y_prime_stn / self.n_sample, dim = 2)
-        loss = torch.sum(loss_st ** 2)
+        loss = torch.sum(loss_st ** 2) * y_coef
         return loss
     
     def stock_loss(self, stock_st, power = 2):
@@ -632,7 +631,7 @@ def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step,
 def slc(lst, idx):
     return lst[min(idx, len(lst) - 1)]
 
-def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True, normalize = False, utility_power = 2, normalize_y = False):
+def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_size, use_true_mu, use_fast_var, train_type, F_exact, H_exact, dis_loss = 1, ckpt_freq = 10000, model_factory = None, curr_ts = None, combo_model = None, clearing_known = True, normalize = False, utility_power = 2, normalize_y = False, y_coef = 1):
     assert train_type in ["generator", "discriminator", "combo"]
     loss_arr = []
     for itr in tqdm(range(epoch)):
@@ -647,7 +646,11 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         if train_type == "generator":
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.regularize_loss(phi_dot_stn, C = 1e-3) #+ loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         elif train_type == "discriminator":
-            loss = loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power, normalize = normalize_y) + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+            stock_loss = loss_factory.stock_loss(stock_st, power = dis_loss)
+            clearing_loss = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power, normalize = normalize_y, y_coef = y_coef)
+            # clearing_stock_loss_ratio = min(stock_loss.data / clearing_loss.data, 1)
+            # clearing_loss *= clearing_stock_loss_ratio
+            loss = stock_loss + clearing_loss + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
         assert not torch.isnan(loss.data)
@@ -684,7 +687,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
     loss_truth_final = float(loss_truth_final.data)
     return model, loss_arr, loss_truth_final
 
-def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver, combo_epoch, combo_sample, use_pretrained_combo, dis_loss = [1], utility_power = 2, use_true_mu = False, use_fast_var = False, total_rounds = 1, normalize_up_to = 0, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, use_combo = False, clearing_known = True, train_args = None):
+def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, gen_epoch, gen_sample, use_pretrained_gen, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_epoch, dis_sample, use_pretrained_dis, combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver, combo_epoch, combo_sample, use_pretrained_combo, dis_loss = [1], y_coef_lst = [1], utility_power = 2, use_true_mu = False, use_fast_var = False, total_rounds = 1, normalize_up_to = 0, train_gen = True, train_dis = True, last_round_dis = True, visualize_obs = 0, seed = 0, ckpt_freq = 10000, use_combo = False, clearing_known = True, train_args = None):
     ## Generate Brownian paths for testing
     torch.manual_seed(seed)
     dW_st_eval = torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T))
@@ -733,7 +736,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             model_factory_combo = prepare_combo(combo_hidden_lst, slc(combo_lr, gan_round), combo_decay, combo_scheduler_step, combo_solver = slc(combo_solver, gan_round), use_pretrained_combo = use_pretrained_combo or gan_round > 0, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
             combo, optimizer_combo, scheduler_combo, prev_ts_combo = model_factory_combo.prepare_model()
             print("\tTraining Discriminator...")
-            combo, loss_arr_combo, loss_truth_final_combo = train_single(None, None, optimizer_combo, scheduler_combo, slc(combo_epoch, gan_round), slc(combo_sample, gan_round), use_true_mu, use_fast_var, "combo", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_combo, curr_ts = curr_ts, combo_model = combo, clearing_known = clearing_known, utility_power = utility_power)
+            combo, loss_arr_combo, loss_truth_final_combo = train_single(None, None, optimizer_combo, scheduler_combo, slc(combo_epoch, gan_round), slc(combo_sample, gan_round), use_true_mu, use_fast_var, "combo", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_combo, curr_ts = curr_ts, combo_model = combo, clearing_known = clearing_known, utility_power = utility_power, y_coef = slc(y_coef_lst, gan_round))
             model_factory_combo.update_model(combo)
             model_factory_combo.save_to_file(curr_ts)
             visualize_loss(loss_arr_combo, gan_round, "combo", curr_ts, loss_truth_final_combo)
@@ -746,6 +749,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo, clearing_known = clearing_known)
         loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
         loss_stock = loss_factory.stock_loss(stock_st, power = slc(dis_loss, gan_round))
+        loss_clearing = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
 
         if utility_power == 2:
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
@@ -754,8 +758,9 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             
         loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
         loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
+        loss_truth_clearing = loss_factory.clearing_loss_y(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power)
         ## Visualize
-        comment = f"Model Utility Loss = {loss_utility:.2e}, Stock Loss = {loss_stock:.2e}\nGround Truth Utility Loss = {loss_truth_utility:.2e}, Stock Loss = {loss_truth_stock:.2e}\n"
+        comment = f"Model Loss: Utility = {loss_utility:.2e}, Stock = {loss_stock:.2e}, Clearing = {loss_clearing:.2e}\nGround Truth Loss: Utility = {loss_truth_utility:.2e}, Stock = {loss_truth_stock:.2e}, Clearing = {loss_truth_clearing:.2e}\n"
         visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [phi_stn[visualize_obs,1:], phi_stn_truth[visualize_obs,1:]], gan_round, curr_ts, "phi", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", benchmark_name], comment = comment)
@@ -792,6 +797,7 @@ train_args = {
     "gen_sample": [1000],#[3000, 1000],
     "dis_sample": [1000],#[3000, 1000],
     "combo_sample": [128, 128],
+    "y_coef_lst": [10, 10, 10, 1],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
