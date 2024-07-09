@@ -483,7 +483,7 @@ class LossFactory():
         y_stn /= (const_stn ** 1)
         y_prime_stn = torch.abs(y_stn) ** (1 / (power - 1)) * torch.sign(y_stn)
         loss_st = torch.sum(y_prime_stn / self.n_sample, dim = 2)
-        loss = torch.sum(loss_st ** 2) * y_coef
+        loss = torch.sum(loss_st ** 2) #* y_coef
         return loss
     
     def stock_loss(self, stock_st, power = 2):
@@ -648,8 +648,8 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
         elif train_type == "discriminator":
             stock_loss = loss_factory.stock_loss(stock_st, power = dis_loss)
             clearing_loss = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power, normalize = normalize_y, y_coef = y_coef)
-            # clearing_stock_loss_ratio = min(stock_loss.data / clearing_loss.data, 1)
-            # clearing_loss *= clearing_stock_loss_ratio
+            stock_clearing_loss_ratio = min(stock_loss.data * 100 / clearing_loss.data, 1)
+            stock_loss *= stock_clearing_loss_ratio
             loss = stock_loss + clearing_loss + loss_factory.regularize_loss(sigma_st, C = 1e-3) + loss_factory.regularize_loss(mu_st, C = 1e-3) #+ loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
         else:
             loss = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) + loss_factory.stock_loss(stock_st, power = dis_loss) + loss_factory.clearing_loss(phi_dot_stn, power = dis_loss)
@@ -784,12 +784,12 @@ train_args = {
     "gen_epoch": [500, 1000, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 10000,
-    "dis_lr": [1e-2, 1e-2, 1e-3],#[1e-2, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1, 1e-1],
-    "dis_epoch": [500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2],#[1e-2, 1e-2, 1e-3],
+    "dis_epoch": [20000],#[500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 2],
     "utility_power": 2, #2,
     "dis_decay": 0.1,
-    "dis_scheduler_step": 50000,
+    "dis_scheduler_step": 10000,
     "combo_lr": [1e-3],
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
@@ -797,14 +797,14 @@ train_args = {
     "gen_sample": [1000],#[3000, 1000],
     "dis_sample": [1000],#[3000, 1000],
     "combo_sample": [128, 128],
-    "y_coef_lst": [10, 10, 10, 1],
+    "y_coef_lst": [10, 10, 10, 10],
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 30,
+    "total_rounds": 1,#10,
     "normalize_up_to": 100,
     "visualize_obs": 0,
-    "train_gen": True,
+    "train_gen": False,
     "train_dis": True,
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
