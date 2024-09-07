@@ -320,8 +320,10 @@ class DynamicFactory():
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
                     x_mu = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
-                mu_s = dis_model((self.T + t, x_mu)).view((-1,))
+                mu_s = torch.abs(dis_model((self.T + t, x_mu)).view((-1,)))
             mu_st[:,t] = mu_s
+            if t < 10:
+                mu_st[:,t] += GAMMA_BAR * (ALPHA ** 2) * S
             if perturb_musigma:
                 sigma_st[:,t] += sigma_perturb
                 mu_st[:,t] += mu_perturb
@@ -792,7 +794,7 @@ train_args = {
     "dis_loss": [2, 2, 2],
     "utility_power": 1.5, #2,
     "dis_decay": 0.1,
-    "dis_scheduler_step": 40000,
+    "dis_scheduler_step": 20000,
     "combo_lr": [1e-3],
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
