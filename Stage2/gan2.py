@@ -409,6 +409,16 @@ class DynamicFactory():
         target = BETA * TR + ALPHA * self.W_st[:,-1]
         stock_st = stock_st + (target - stock_st[:,-1]).reshape((self.n_sample, 1))
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
+
+    def frictionless_stock(self):
+        mu_bar = GAMMA_BAR * (ALPHA ** 2) * S
+        sigma_bar = ALPHA
+        target = BETA * TR + ALPHA * self.W_st[:,-1]
+        stock_st = torch.zeros((self.n_sample, self.T + 1)).to(device = DEVICE)
+        for t in range(T):
+            stock_st[:,t+1] = stock_st[:,t] + mu_bar * DT + sigma_bar * self.dW_st[:,t]
+        stock_st = stock_st + (target - stock_st[:,-1]).reshape((self.n_sample, 1))
+        return stock_st
     
     def pasting(self):
         pass
@@ -748,6 +758,10 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         ## Evaluation per round
         dynamic_factory = DynamicFactory(dW_st_eval)
         loss_factory = LossFactory(dW_st_eval)
+        model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = True, use_fast_var = use_fast_var, clearing_known = clearing_known)
+        model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = True, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+        generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
+        discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
         if not use_combo:
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
         else:
@@ -760,17 +774,18 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
         else:
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
+        stock_st_frictionless = dynamic_factory.frictionless_stock()
             
         loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
         loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
         loss_truth_clearing = loss_factory.clearing_loss_y(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power)
         ## Visualize
-        comment = f"Model Loss: Utility = {loss_utility:.2e}, Stock = {loss_stock:.2e}, Clearing = {loss_clearing:.2e}\nGround Truth Loss: Utility = {loss_truth_utility:.2e}, Stock = {loss_truth_stock:.2e}, Clearing = {loss_truth_clearing:.2e}\n"
+        comment = f"Model Loss: Utility = {loss_utility:.2e}, Stock = {loss_stock:.2e}, Clearing = {loss_clearing:.2e}\n{benchmark_name} Loss: Utility = {loss_truth_utility:.2e}, Stock = {loss_truth_stock:.2e}, Clearing = {loss_truth_clearing:.2e}\n"
         visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [phi_stn[visualize_obs,1:], phi_stn_truth[visualize_obs,1:]], gan_round, curr_ts, "phi", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", benchmark_name], comment = comment)
-        visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:], stock_st_frictionless[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", benchmark_name, "Frictionless"], comment = comment)
         ## Save logs to file
         if not use_combo:
             write_logs([prev_ts_gen, curr_ts], train_args)
@@ -806,11 +821,11 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,#10,
+    "total_rounds": 1,#10,
     "normalize_up_to": 100,
     "visualize_obs": 0,
-    "train_gen": True,
-    "train_dis": True,
+    "train_gen": False,
+    "train_dis": False,
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,
     "use_pretrained_combo": True,
