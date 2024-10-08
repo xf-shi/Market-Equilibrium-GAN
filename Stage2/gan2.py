@@ -868,7 +868,7 @@ def inference(generator, discriminator, randomized = True):
                 for n in range(N_AGENT):
                     phi_gamma_st[:,t] += GAMMA_LIST[n] * phi_stn[:,t,n]
                 curr_t = torch.ones((N_SAMPLE, 1)).to(device = DEVICE)
-                x_mu = torch.cat((delta_phi_stn[:,t,:], W_st[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
+                x_mu = torch.cat((delta_phi_stn[:,t,:-1], W_st[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
                 mu_s = discriminator((T + t, x_mu)).view((-1,))
                 x_dis = curr_t.reshape((N_SAMPLE, 1))
                 sigma_s = torch.abs(discriminator((t, x_dis)).view((-1,)))
@@ -890,12 +890,13 @@ def inference(generator, discriminator, randomized = True):
     # x_arr, y_arr, name, xname, yname
     if randomized:
         visualize_infer(TIMESTAMPS, [musigma_t, musigma_t_true], "musigma_t", "T", "mu over sigma^2", ["Model", "Truth"])
-        visualize_infer(TIMESTAMPS, [mu_t, mu_t_true], "mu_t", "T", "mu", ["Model", "Truth"])
-        mu_s = mu_st.mean(dim = 1)
-        mu_s_true = mu_st_true.mean(dim = 1)
-        phi_gamma_s = phi_gamma_st.mean(dim = 1)
-        visualize_infer(phi_gamma_s, [mu_s, mu_s_true], "mu_phigamma", "\sum_n phi_n * gamma_n", "mu", ["Model", "Truth"], title = "")
+        # visualize_infer(TIMESTAMPS, [mu_t, mu_t_true], "mu_t", "T", "mu", ["Model", "Truth"])
+        # mu_s = mu_st.mean(dim = 1)
+        # mu_s_true = mu_st_true.mean(dim = 1)
+        # phi_gamma_s = phi_gamma_st.mean(dim = 1)
+        # visualize_infer(phi_gamma_s, [mu_s, mu_s_true], "mu_phigamma", "\sum_n phi_n * gamma_n", "mu", ["Model", "Truth"], title = "")
     else:
+        # ts = 80
         # slope = (mu_st[-1,ts] - mu_st[0,ts]) / (rg * 2)
         # slope_true = (mu_st_true[-1,ts] - mu_st_true[0,ts]) / (rg * 2)
         # visualize_infer(delta_phi_stn[:,ts,agent_num], [mu_st[:,ts], mu_st_true[:,ts]], "mu_fast", "Fast Variable", "mu", ["Model", "Truth"], title = f"Model Slope = {slope}\nTrue Slope = {slope_true}")
@@ -903,10 +904,10 @@ def inference(generator, discriminator, randomized = True):
         mu_s = mu_st.mean(dim = 1)
         mu_s_true = mu_st_true.mean(dim = 1)
         phi_gamma_s = phi_gamma_st.mean(dim = 1)
-        # slope = (mu_s[-1] - mu_s[0]) / (rg * 2)
-        # slope_true = (mu_s_true[-1] - mu_s_true[0]) / (rg * 2)
-        # visualize_infer(delta_phi_stn[:,ts,agent_num], [mu_s, mu_s_true], "mu_fast", "Fast Variable", "mu", ["Model", "Truth"], title = f"Model Slope = {slope}\nTrue Slope = {slope_true}")
-        visualize_infer(phi_gamma_s, [mu_s, mu_s_true], "mu_phigamma", "\sum_n phi_n * gamma_n", "mu", ["Model", "Truth"], title = "")
+        slope = (mu_s[-1] - mu_s[0]) / (rg * 2)
+        slope_true = (mu_s_true[-1] - mu_s_true[0]) / (rg * 2)
+        visualize_infer(delta_phi_stn[:,ts,agent_num], [mu_s, mu_s_true], "mu_fast", "Fast Variable", "mu", ["Model", "Truth"], title = f"Model Slope = {slope}\nTrue Slope = {slope_true}")
+        # visualize_infer(phi_gamma_s, [mu_s, mu_s_true], "mu_phigamma", "\sum_n phi_n * gamma_n", "mu", ["Model", "Truth"], title = "")
     return mu_st, sigma_st, delta_phi_stn, mu_st_true
 
 def transfer_learning():
@@ -938,7 +939,7 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,#10,
+    "total_rounds": 0,#10,
     "normalize_up_to": 100,
     "visualize_obs": 0,
     "train_gen": True,
@@ -955,4 +956,4 @@ train_args = {
     "clearing_known": True
 }
 generator, discriminator = training_pipeline(train_args = train_args, **train_args)
-# inference(generator, discriminator, randomized = False)
+inference(generator, discriminator, randomized = True)
