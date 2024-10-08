@@ -1,6 +1,7 @@
 drive_dir = "." #"drive/MyDrive/CFRM/RL/SingleAgent-Stage2"
 
 import json
+import math
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -155,8 +156,8 @@ class Net(nn.Module):
         for i in range(len(self.layer_lst) - 1):
             x = self.layer_lst[i](x)
 #            x = self.bn[i](x)
-            # x = F.relu(x)
-            x = torch.tanh(x)
+            x = F.relu(x)
+            # x = torch.tanh(x)
         return self.layer_lst[-1](x)
 
 ## Model wrapper
@@ -287,12 +288,15 @@ class DynamicFactory():
         ## DEBUGGING!!!
 #         if F_exact is not None and H_exact is not None:
 #             phi_dot_stn, phi_stn, _, _, _ = self.ground_truth(F_exact, H_exact)
+        n_agent_itr = N_AGENT
+        if clearing_known:
+            n_agent_itr -= 1
         for t in range(self.T):
             curr_t = torch.ones((self.n_sample, 1)).to(device = DEVICE)
             ## Populate phi_bar
             for n in range(N_AGENT):
                 phi_bar_stn[:,t,n] = self.mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * self.W_st[:,t]
-            delta_phi_stn = phi_stn[:,t,:] - phi_bar_stn[:,t,:]
+            delta_phi_stn = phi_stn[:,t,:n_agent_itr] - phi_bar_stn[:,t,:n_agent_itr]
             ## Mu Sigma perturbations
             perturb_sd = 2.0 #* ((t+1) * DT) ** 0.5
             perturb_phidot_sd = 100.0
@@ -319,7 +323,7 @@ class DynamicFactory():
                 if not use_fast_var:
                     x_mu = torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1)
                 else:
-                    x_mu = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
+                    x_mu = torch.cat((delta_phi_stn, self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_dot_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((fast_var_stn, curr_t), dim=1) #
                 mu_s = dis_model((self.T + t, x_mu)).view((-1,))
             mu_st[:,t] = mu_s
             # if t < 10:
@@ -330,9 +334,6 @@ class DynamicFactory():
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
             
             ## Generator output
-            n_agent_itr = N_AGENT
-            if clearing_known:
-                n_agent_itr -= 1
             if not use_fast_var:
                 x_gen = torch.cat((mu_st[:,t].view((self.n_sample, 1)), sigma_st[:,t].view((self.n_sample, 1)), self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #torch.cat((phi_stn[:,t,:], self.W_st[:,t].reshape((self.n_sample, 1)), curr_t), dim=1) #
             else:
@@ -536,6 +537,21 @@ def visualize_loss(loss_arr, round, algo, ts, loss_truth):
     plt.savefig(f"{drive_dir}/Plots/loss_round={round}_{algo}_{ts}.png")
     plt.close()
 
+## Visualize inference function through training
+def visualize_infer(x_arr, y_arr_lst, name, xname, yname, label_lst, title = ""):
+    idx = 0
+    for y_arr, label in zip(y_arr_lst, label_lst):
+        if len(label_lst) > 1:
+            plt.plot(x_arr, y_arr, label = label)
+        else:
+            plt.scatter(x_arr, y_arr, label = label)
+    plt.xlabel(xname)
+    plt.ylabel(yname)
+    plt.title(title)
+    plt.legend()
+    plt.savefig(f"{drive_dir}/Plots/{name}.png")
+    plt.close()
+
 ## Visualize the comparison of dynamics
 def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment = None):
     assert name in ["phi", "phi_dot", "sigma", "mu", "s"]
@@ -548,8 +564,10 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         title = "$\sigma_t$"
     elif name == "mu":
         title = "$\mu_t$"
-    else:
+    elif name == "s":
         title = "$S_t$"
+    else:
+        title = name
     if comment is not None:
         title2 = title + "\n" + str(comment)
     else:
@@ -618,10 +636,12 @@ def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
     output_dim = N_AGENT - 1
     if not clearing_known:
         output_dim += 1
+    if clearing_known:
+        input_dim -= 1
     model_factory = ModelFactory(n_model, "generator", input_dim, gen_hidden_lst, output_dim, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain)
     return model_factory
 
-def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver = "Adam", use_pretrained_dis = True, use_true_mu = False, use_fast_var = False):
+def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver = "Adam", use_pretrained_dis = True, use_true_mu = False, use_fast_var = False, clearing_known = True):
     n_model = T + 1
     if not use_true_mu:
         n_model += T
@@ -630,6 +650,8 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
         input_dim = 2 + N_AGENT #2 + N_AGENT
     else:
         input_dim = 2 + N_AGENT
+    if clearing_known:
+        input_dim -= 1
     model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T)
     return model_factory
 
@@ -799,6 +821,93 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             write_logs([prev_ts_gen, curr_ts], train_args)
         else:
             write_logs([prev_ts_combo, curr_ts], train_args)
+    if total_rounds == 0:
+        model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, 0), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, 0), use_pretrained_gen = True, use_fast_var = use_fast_var, clearing_known = clearing_known)
+        model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, 0), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, 0), use_pretrained_dis = True, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+        generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
+        discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
+    return generator, discriminator
+
+def inference(generator, discriminator, randomized = True):
+    N_AGENT = 2 #10
+    agent_num = 0
+    if randomized:
+        N_SAMPLE = 50000
+        delta_phi_stn = torch.normal(0, 3, size = (N_SAMPLE, T, N_AGENT)) #torch.zeros((N_SAMPLE, T + 1, N_AGENT)).to(device = DEVICE) #
+        torch.manual_seed(0)
+        dW_st = torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T)) #torch.zeros((N_SAMPLE, T)).to(device = DEVICE) #
+    else:
+        N_SAMPLE = 100
+        ts = 0
+        rg = 3
+        delta_phi_stn = torch.zeros((N_SAMPLE, T + 1, N_AGENT)).to(device = DEVICE) #torch.normal(0, 3, size = (N_SAMPLE, T, N_AGENT)) #
+        for ts in range(T):
+            delta_phi_stn[:,ts,agent_num] = torch.from_numpy(np.linspace(-rg, rg, N_SAMPLE))
+        dW_st = torch.zeros((N_SAMPLE, T)).to(device = DEVICE) #torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T)) #
+    phi_bar_stn = torch.zeros((N_SAMPLE, T, N_AGENT)).to(device = DEVICE)
+    phi_stn = torch.zeros((N_SAMPLE, T, N_AGENT)).to(device = DEVICE)
+    phi_stn[:,0,:] = S * GAMMA_BAR / GAMMA_LIST
+    W_st = get_W(dW_st, W_s0 = None)
+    mu_st = torch.zeros((N_SAMPLE, T)).to(device = DEVICE)
+    sigma_st = torch.zeros((N_SAMPLE, T)).to(device = DEVICE)
+    mu_bar = GAMMA_BAR * ALPHA ** 2 * S
+    ## mu_st += 1 / N_AGENT * GAMMA_LIST[n] * sigma_st * (sigma_st * phi_stn.clone()[:,:,n] + XI_LIST[n] * W_st)
+    mu_st_true = torch.zeros((N_SAMPLE, T)).to(device = DEVICE)
+    phi_gamma_st = torch.zeros((N_SAMPLE, T)).to(device = DEVICE)
+    REPEAT = 1
+    musigma_t_all = 0
+    musigma_t_true_all = 0
+    mu_t_all = 0
+    mu_t_true_all = 0
+    with torch.no_grad():
+        for _ in tqdm(range(REPEAT)):
+            for t in range(T):
+                for n in range(N_AGENT):
+                    phi_bar_stn[:,t,n] = mu_bar / GAMMA_LIST[n] / ALPHA ** 2 - XI_LIST[n] / ALPHA * W_st[:,t]
+                phi_stn[:,t,:] = phi_bar_stn[:,t,:] + delta_phi_stn[:,t,:]
+                for n in range(N_AGENT):
+                    phi_gamma_st[:,t] += GAMMA_LIST[n] * phi_stn[:,t,n]
+                curr_t = torch.ones((N_SAMPLE, 1)).to(device = DEVICE)
+                x_mu = torch.cat((delta_phi_stn[:,t,:], W_st[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
+                mu_s = discriminator((T + t, x_mu)).view((-1,))
+                x_dis = curr_t.reshape((N_SAMPLE, 1))
+                sigma_s = torch.abs(discriminator((t, x_dis)).view((-1,)))
+                mu_st[:,t] = mu_s
+                sigma_st[:,t] = sigma_s
+                for n in range(N_AGENT):
+                    mu_st_true[:,t] += 1 / N_AGENT * GAMMA_LIST[n] * sigma_s * (sigma_s * phi_stn[:,t,n] + XI_LIST[n] * W_st[:,t])
+            musigma_st = mu_st / sigma_st ** 2
+            musigma_t = musigma_st.mean(dim = 0)
+            musigma_st_true = mu_st_true / sigma_st ** 2
+            musigma_t_true = musigma_st_true.mean(dim = 0)
+            mu_t = mu_st.mean(dim = 0)
+            mu_t_true = mu_st_true.mean(dim = 0)
+            ## Update
+            musigma_t_all += musigma_t / REPEAT
+            musigma_t_true_all += musigma_t_true / REPEAT
+            mu_t_all += mu_t / REPEAT
+            mu_t_true_all += mu_t_true / REPEAT
+    # x_arr, y_arr, name, xname, yname
+    if randomized:
+        visualize_infer(TIMESTAMPS, [musigma_t, musigma_t_true], "musigma_t", "T", "mu over sigma^2", ["Model", "Truth"])
+        visualize_infer(TIMESTAMPS, [mu_t, mu_t_true], "mu_t", "T", "mu", ["Model", "Truth"])
+        mu_s = mu_st.mean(dim = 1)
+        mu_s_true = mu_st_true.mean(dim = 1)
+        phi_gamma_s = phi_gamma_st.mean(dim = 1)
+        visualize_infer(phi_gamma_s, [mu_s, mu_s_true], "mu_phigamma", "\sum_n phi_n * gamma_n", "mu", ["Model", "Truth"], title = "")
+    else:
+        # slope = (mu_st[-1,ts] - mu_st[0,ts]) / (rg * 2)
+        # slope_true = (mu_st_true[-1,ts] - mu_st_true[0,ts]) / (rg * 2)
+        # visualize_infer(delta_phi_stn[:,ts,agent_num], [mu_st[:,ts], mu_st_true[:,ts]], "mu_fast", "Fast Variable", "mu", ["Model", "Truth"], title = f"Model Slope = {slope}\nTrue Slope = {slope_true}")
+        #####
+        mu_s = mu_st.mean(dim = 1)
+        mu_s_true = mu_st_true.mean(dim = 1)
+        phi_gamma_s = phi_gamma_st.mean(dim = 1)
+        # slope = (mu_s[-1] - mu_s[0]) / (rg * 2)
+        # slope_true = (mu_s_true[-1] - mu_s_true[0]) / (rg * 2)
+        # visualize_infer(delta_phi_stn[:,ts,agent_num], [mu_s, mu_s_true], "mu_fast", "Fast Variable", "mu", ["Model", "Truth"], title = f"Model Slope = {slope}\nTrue Slope = {slope_true}")
+        visualize_infer(phi_gamma_s, [mu_s, mu_s_true], "mu_phigamma", "\sum_n phi_n * gamma_n", "mu", ["Model", "Truth"], title = "")
+    return mu_st, sigma_st, delta_phi_stn, mu_st_true
 
 def transfer_learning():
     pass
@@ -817,7 +926,7 @@ train_args = {
     "dis_loss": [2, 2, 2],
     "utility_power": 1.5, #2,
     "dis_decay": 0.1,
-    "dis_scheduler_step": 20000,
+    "dis_scheduler_step": 5000,
     "combo_lr": [1e-3],
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
@@ -843,6 +952,7 @@ train_args = {
     "seed": 0,
     "ckpt_freq": 10000,
     "use_combo": False,
-    "clearing_known": False
+    "clearing_known": True
 }
-training_pipeline(train_args = train_args, **train_args)
+generator, discriminator = training_pipeline(train_args = train_args, **train_args)
+# inference(generator, discriminator, randomized = False)
