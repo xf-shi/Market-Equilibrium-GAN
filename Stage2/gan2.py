@@ -45,8 +45,8 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
+XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
+GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
@@ -156,8 +156,8 @@ class Net(nn.Module):
         for i in range(len(self.layer_lst) - 1):
             x = self.layer_lst[i](x)
 #            x = self.bn[i](x)
-            x = F.relu(x)
-            # x = torch.tanh(x)
+            # x = F.relu(x)
+            x = torch.tanh(x)
         return self.layer_lst[-1](x)
 
 ## Model wrapper
@@ -554,11 +554,11 @@ def visualize_infer(x_arr, y_arr_lst, name, xname, yname, label_lst, title = "")
 
 ## Visualize the comparison of dynamics
 def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment = None):
-    assert name in ["phi", "phi_dot", "sigma", "mu", "s"]
+    assert name in ["phi", "phi_dot", "phi_dot_short", "sigma", "mu", "s"]
     round += 1
     if name == "phi":
         title = "${\\varphi}_t$"
-    elif name == "phi_dot":
+    elif name in ["phi_dot", "phi_dot_short"]:
         title = "$\dot{\\varphi}_t$"
     elif name == "sigma":
         title = "$\sigma_t$"
@@ -572,6 +572,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         title2 = title + "\n" + str(comment)
     else:
         title2 = title
+    if name == "phi_dot_short":
+        title2 = ""
     if name == "phi_dot":
         size = arr_lst[0].cpu().detach().numpy().shape
         if len(size) == 1:
@@ -826,11 +828,43 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, 0), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, 0), use_pretrained_dis = True, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
         generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
         discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
+
+        gan_round = 0
+        curr_ts = "curr"
+        dynamic_factory = DynamicFactory(dW_st_eval)
+        loss_factory = LossFactory(dW_st_eval)
+        if not use_combo:
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
+        else:
+            phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo, clearing_known = clearing_known)
+        loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
+        loss_stock = loss_factory.stock_loss(stock_st, power = slc(dis_loss, gan_round))
+        loss_clearing = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+        if utility_power == 2:
+            phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
+        else:
+            phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
+        stock_st_frictionless = dynamic_factory.frictionless_stock()
+        mu_st_frictionless = dynamic_factory.frictionless_mu()
+        loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
+        loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
+        loss_truth_clearing = loss_factory.clearing_loss_y(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power)
+        ## Visualize
+        comment = f"Model Loss: Utility = {loss_utility:.2e}, Stock = {loss_stock:.2e}, Clearing = {loss_clearing:.2e}\n{benchmark_name} Loss: Utility = {loss_truth_utility:.2e}, Stock = {loss_truth_stock:.2e}, Clearing = {loss_truth_clearing:.2e}\n"
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [phi_stn[visualize_obs,1:], phi_stn_truth[visualize_obs,1:]], gan_round, curr_ts, "phi", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:], mu_st_frictionless[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", benchmark_name, "Frictionless"], comment = comment)
+        visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", benchmark_name], comment = comment)
+        visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:], stock_st_frictionless[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", benchmark_name, "Frictionless"], comment = comment)
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[2,7,8]], phi_dot_stn_truth[visualize_obs,:,[2,7,8]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
     return generator, discriminator
 
-def inference(generator, discriminator, randomized = True):
-    N_AGENT = 2 #10
+def inference(generator, discriminator, randomized = True, clearing_known = False):
+    N_AGENT = 10 #10
     agent_num = 0
+    n_agent_itr = N_AGENT
+    if clearing_known:
+        n_agent_itr -= 1
     if randomized:
         N_SAMPLE = 50000
         delta_phi_stn = torch.normal(0, 3, size = (N_SAMPLE, T, N_AGENT)) #torch.zeros((N_SAMPLE, T + 1, N_AGENT)).to(device = DEVICE) #
@@ -868,7 +902,7 @@ def inference(generator, discriminator, randomized = True):
                 for n in range(N_AGENT):
                     phi_gamma_st[:,t] += GAMMA_LIST[n] * phi_stn[:,t,n]
                 curr_t = torch.ones((N_SAMPLE, 1)).to(device = DEVICE)
-                x_mu = torch.cat((delta_phi_stn[:,t,:-1], W_st[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
+                x_mu = torch.cat((delta_phi_stn[:,t,:n_agent_itr], W_st[:,t].reshape((N_SAMPLE, 1)), curr_t), dim=1)
                 mu_s = discriminator((T + t, x_mu)).view((-1,))
                 x_dis = curr_t.reshape((N_SAMPLE, 1))
                 sigma_s = torch.abs(discriminator((t, x_dis)).view((-1,)))
@@ -925,7 +959,7 @@ train_args = {
     "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
     "dis_epoch": [500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 2],
-    "utility_power": 1.5, #2,
+    "utility_power": 2, #2,
     "dis_decay": 0.1,
     "dis_scheduler_step": 5000,
     "combo_lr": [1e-3],
@@ -953,7 +987,7 @@ train_args = {
     "seed": 0,
     "ckpt_freq": 10000,
     "use_combo": False,
-    "clearing_known": True
+    "clearing_known": False
 }
 generator, discriminator = training_pipeline(train_args = train_args, **train_args)
-inference(generator, discriminator, randomized = True)
+# inference(generator, discriminator, randomized = True, clearing_known = train_args["clearing_known"])
