@@ -772,7 +772,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             if train_dis and (gan_round < total_rounds - 1 or last_round_dis):
                 print("\tTraining Discriminator...")
                 model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, gan_round), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, gan_round), use_pretrained_gen = use_pretrained_gen or not train_gen or gan_round > 0, use_fast_var = use_fast_var, clearing_known = clearing_known)
-                model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = False, use_true_mu = use_true_mu, use_fast_var = use_fast_var)
+                model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, gan_round), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, gan_round), use_pretrained_dis = False, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known)
                 generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
                 discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
                 discriminator, loss_arr_dis, loss_truth_final_dis = train_single(generator, discriminator, optimizer_dis, scheduler_dis, slc(dis_epoch, gan_round), slc(dis_sample, gan_round), use_true_mu, use_fast_var, "discriminator", F_exact, H_exact, dis_loss = slc(dis_loss, gan_round), ckpt_freq = ckpt_freq, model_factory = model_factory_dis, curr_ts = curr_ts, clearing_known = clearing_known, utility_power = utility_power, normalize_y = gan_round < 3)
