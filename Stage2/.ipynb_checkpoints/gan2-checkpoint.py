@@ -978,7 +978,7 @@ train_args = {
     "combo_solver": ["Adam"],
     "total_rounds": 0,#10,
     "normalize_up_to": 100,
-    "visualize_obs": 0,
+    "visualize_obs": 20,
     "train_gen": True,
     "train_dis": True,
     "use_pretrained_gen": True,
