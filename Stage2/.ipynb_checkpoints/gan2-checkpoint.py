@@ -27,7 +27,7 @@ else:
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
 
-TR = 0.2 #0.4 for 10 agents #20
+TR = 0.2 #0.2 #0.4 for 10 agents #20
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
@@ -45,8 +45,8 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
+XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
+GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
@@ -381,8 +381,8 @@ class DynamicFactory():
             delta_phi_stn[:,t+1,-1] = phi_stn[:,t+1,-1] - phi_bar_stn[:,t+1,-1]
             phi_dot_stn[:,t,:] = (phi_stn[:,t+1,:] - phi_stn[:,t,:]) / DT
             
-            sigma_st[:,t] = ALPHA + -1.153 * (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * (LAM / (1 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * XI_LIST[0] / ALPHA
-            #sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
+            # sigma_st[:,t] = ALPHA + -1.153 * (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * (LAM / (1 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * XI_LIST[0] / ALPHA
+            sigma_st[:,t] = ALPHA + (GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2) * (LAM / (2 ** (power - 1) * power)) ** (2 / (power + 2)) * ((GAMMA_1 + GAMMA_2) / 2 * ALPHA ** 2) ** (power / (power + 2)) * (ALPHA / XI_LIST[0]) ** ((4 - 2 * power) / (power + 2)) * g_tilda_prime_0 * XI_LIST[0] / ALPHA
             mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
             stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
         target = BETA * TR + ALPHA * self.W_st[:,-1]
@@ -857,11 +857,12 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:], mu_st_frictionless[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", benchmark_name, "Frictionless"], comment = comment)
         visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:], stock_st_frictionless[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", benchmark_name, "Frictionless"], comment = comment)
+        # visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[0,1]], phi_dot_stn_truth[visualize_obs,:,[0,1]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
         visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[2,7,8]], phi_dot_stn_truth[visualize_obs,:,[2,7,8]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
     return generator, discriminator
 
 def inference(generator, discriminator, randomized = True, clearing_known = False):
-    N_AGENT = 10 #10
+    N_AGENT = 2 #10
     agent_num = 0
     n_agent_itr = N_AGENT
     if clearing_known:
@@ -960,9 +961,9 @@ train_args = {
     "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
     "dis_epoch": [500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 2],
-    "utility_power": 1.5, #2,
+    "utility_power": 2, #2,
     "dis_decay": 0.1,
-    "dis_scheduler_step": 5000,
+    "dis_scheduler_step": 20000,
     "combo_lr": [1e-3],
     "combo_epoch": [100000],#[500, 1000, 10000, 50000],
     "combo_decay": 0.1,
@@ -974,7 +975,7 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,#10,
+    "total_rounds": 0,#10,
     "normalize_up_to": 100,
     "visualize_obs": 0,
     "train_gen": True,
@@ -991,4 +992,4 @@ train_args = {
     "clearing_known": False
 }
 generator, discriminator = training_pipeline(train_args = train_args, **train_args)
-# inference(generator, discriminator, randomized = True, clearing_known = train_args["clearing_known"])
+# inference(generator, discriminator, randomized = False, clearing_known = train_args["clearing_known"])
