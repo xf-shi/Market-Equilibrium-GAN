@@ -868,8 +868,8 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         # visualize_comparison(TIMESTAMPS, [mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:], mu_st_frictionless[visualize_obs,:]], gan_round, curr_ts, "mu", ["Model", benchmark_name, "Frictionless"], comment = comment)
         visualize_comparison(TIMESTAMPS, [sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], gan_round, curr_ts, "sigma", ["Model", benchmark_name], comment = comment)
         visualize_comparison(TIMESTAMPS, [stock_st[visualize_obs,1:], stock_st_truth[visualize_obs,1:], stock_st_frictionless[visualize_obs,1:]], gan_round, curr_ts, "s", ["Model", benchmark_name, "Frictionless"], comment = comment)
-        visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[0,1]], phi_dot_stn_truth[visualize_obs,:,[0,1]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
-        # visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[2,7,8]], phi_dot_stn_truth[visualize_obs,:,[2,7,8]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
+        # visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[0,1]], phi_dot_stn_truth[visualize_obs,:,[0,1]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:,[2,7,8]], phi_dot_stn_truth[visualize_obs,:,[2,7,8]]], gan_round, curr_ts, "phi_dot_short", ["Model", benchmark_name], comment = "")
     return generator, discriminator
 
 def inference(generator, discriminator, randomized = True, clearing_known = False):
@@ -986,7 +986,7 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 10,#10,
+    "total_rounds": 0,#10,
     "normalize_up_to": 100,
     "visualize_obs": 20,
     "train_gen": True,
