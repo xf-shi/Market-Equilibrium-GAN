@@ -45,18 +45,18 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
-GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
+XI_LIST = torch.tensor([-3, -2, -2, 3, 4]).float() * (-1) #torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3, -3]).float() #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
+GAMMA_LIST = torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE) # #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
 S = 1
 ## 1e-2: power 2 10 agents, power 1.5 2 agents
 ## 1e-3: power 2 2 agents
-LAM = 2e-1 #1e-2 for 10 agents #1.08102e-10 * S_VAL #0.1 #
+LAM = 1e-2 #1e-2 for 10 agents #1.08102e-10 * S_VAL #0.1 #
 
 S_TERMINAL = 1 #1/3 #245.47
-S_INITIAL = 0.8 #0 #250 #0#
+S_INITIAL = 0 #0 #250 #0#
 
 assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-1]
 
@@ -703,7 +703,7 @@ def train_single(generator, discriminator, optimizer, scheduler, epoch, sample_s
             stock_loss = loss_factory.stock_loss(stock_st, power = dis_loss)
             clearing_loss = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power, normalize = normalize_y, y_coef = y_coef)
             if itr == 0:
-                stock_clearing_loss_ratio = clearing_loss.data * 1 / (stock_loss.data * 1) #3000 #min(stock_loss.data * 100 / clearing_loss.data, 1)
+                stock_clearing_loss_ratio = clearing_loss.data * 3000 / (stock_loss.data * 1) #3000 #min(stock_loss.data * 100 / clearing_loss.data, 1)
                 # clearing_stock_loss_ratio = stock_loss.data / clearing_loss.data * 100
             stock_loss *= stock_clearing_loss_ratio
             # clearing_loss *= clearing_stock_loss_ratio
@@ -810,7 +810,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo, clearing_known = clearing_known)
         loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
         loss_stock = loss_factory.stock_loss(stock_st, power = slc(dis_loss, gan_round))
-        loss_clearing = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+        loss_clearing = loss_factory.clearing_loss(phi_dot_stn, power = utility_power)
 
         if utility_power == 2:
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
@@ -821,7 +821,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             
         loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
         loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
-        loss_truth_clearing = loss_factory.clearing_loss_y(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power)
+        loss_truth_clearing = loss_factory.clearing_loss(phi_dot_stn_truth, power = utility_power)
         ## Visualize
         comment = f"Model Loss: Utility = {loss_utility:.2e}, Stock = {loss_stock:.2e}, Clearing = {loss_clearing:.2e}\n{benchmark_name} Loss: Utility = {loss_truth_utility:.2e}, Stock = {loss_truth_stock:.2e}, Clearing = {loss_truth_clearing:.2e}\n"
         visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", benchmark_name], comment = comment)
@@ -850,7 +850,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
             phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(None, None, use_true_mu = use_true_mu, use_fast_var = use_fast_var, combo_model = combo, clearing_known = clearing_known)
         loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
         loss_stock = loss_factory.stock_loss(stock_st, power = slc(dis_loss, gan_round))
-        loss_clearing = loss_factory.clearing_loss_y(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+        loss_clearing = loss_factory.clearing_loss(phi_dot_stn, power = utility_power)
         if utility_power == 2:
             phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
         else:
@@ -859,7 +859,7 @@ def training_pipeline(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         mu_st_frictionless = dynamic_factory.frictionless_mu()
         loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
         loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, gan_round))
-        loss_truth_clearing = loss_factory.clearing_loss_y(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power)
+        loss_truth_clearing = loss_factory.clearing_loss(phi_dot_stn_truth, power = utility_power)
         ## Visualize
         comment = f"Model Loss: Utility = {loss_utility:.2e}, Stock = {loss_stock:.2e}, Clearing = {loss_clearing:.2e}\n{benchmark_name} Loss: Utility = {loss_truth_utility:.2e}, Stock = {loss_truth_stock:.2e}, Clearing = {loss_truth_clearing:.2e}\n"
         visualize_comparison(TIMESTAMPS, [phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], gan_round, curr_ts, "phi_dot", ["Model", benchmark_name], comment = comment)
