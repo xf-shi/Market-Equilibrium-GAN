@@ -24,10 +24,27 @@ else:
     print('CUDA is available!  Training on GPU ...')
     DEVICE = "cuda"
 
+## Regimes
+N_AGENT = 5
+COST_POWER = 1.5
+
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
 
-TR = 0.4 #0.2 #0.4 for 2 agents #20
+if COST_POWER == 2:
+    TR = 0.2
+    XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10)
+    GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
+else:
+    if N_AGENT == 2:
+        TR = 0.4
+        XI_LIST = torch.tensor([3, -3]).float()
+        GAMMA_LIST = torch.tensor([1, 2]).float().to(device = DEVICE)
+    else:
+        TR = 0.2
+        XI_LIST = torch.tensor([-3, -2, -2, 3, 4]).float() * (-1)
+        GAMMA_LIST = torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE)
+# TR = 0.2 #0.2 #0.2 for quad cost 2 agents and 0.4 for 1.5 cost 2 agents #20
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
@@ -45,8 +62,8 @@ GAMMA_2 = 2
 # XI_LIST = torch.tensor([3, -3]).float()
 # GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE)
 
-XI_LIST = torch.tensor([3, -3]).float() #torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([-3, -2, -2, 3, 4]).float() * (-1) #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
-GAMMA_LIST = torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE) # #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
+# XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10) #torch.tensor([3, -3]).float() #torch.tensor([-3, -2, -2, 3, 4]).float() * (-1) #torch.tensor([3.01, 2.92, -2.86, 3.14, 2.90, -3.12, -2.88, 2.90, -2.93, -3.08]).float() #torch.tensor([3, -2, 2, -3]).float() #
+# GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE) #torch.tensor([GAMMA_1, GAMMA_2]).float().to(device = DEVICE) #torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE) # #torch.tensor([1, 1, 1.3, 1.3, 1.6, 1.6, 1.9, 1.9, 2.2, 2.2]).float().to(device = DEVICE) #torch.tensor([1, 1, 2, 2]).float().to(device = DEVICE) #
 
 XI_NORM_LIST = (torch.max(torch.abs(XI_LIST)) / torch.abs(XI_LIST)) ** 2
 
@@ -176,7 +193,7 @@ class ModelFull(nn.Module):
 
 ## Construct arbitrary neural network models with optimizer and scheduler
 class ModelFactory:
-    def __init__(self, time_len, algo, input_dim, hidden_lst, output_dim, lr, decay, scheduler_step, use_s0 = False, solver = "Adam", retrain = False, constant_len = 0):
+    def __init__(self, time_len, algo, input_dim, hidden_lst, output_dim, lr, decay, scheduler_step, use_s0 = False, solver = "Adam", retrain = False, constant_len = 0, drive_dir = "."):
         assert solver in ["Adam", "SGD", "RMSprop"]
         assert algo in ["generator", "discriminator", "combo"]
         self.lr = lr
@@ -192,6 +209,7 @@ class ModelFactory:
         self.time_len = time_len
         self.use_s0 = use_s0
         self.constant_len = constant_len
+        self.drive_dir = drive_dir
 
         if not retrain:
             self.model, self.prev_ts = self.load_latest()
@@ -236,17 +254,17 @@ class ModelFactory:
         if curr_ts is None:
             curr_ts = datetime.now(tz=pytz.timezone("America/New_York")).strftime("%Y-%m-%d-%H-%M-%S")
         model_save = self.model.cpu()
-        torch.save(model_save, f"{drive_dir}/Models/{self.algo}__{curr_ts}.pt")
+        torch.save(model_save, f"{self.drive_dir}/Models/{self.algo}__{curr_ts}.pt")
         self.model = self.model.to(device=DEVICE)
         return curr_ts
     
     def load_latest(self):
-        ts_lst = [f.strip(".pt").split("__")[1] for f in os.listdir(f"{drive_dir}/Models/") if f.endswith(".pt") and f.startswith(self.algo)]
+        ts_lst = [f.strip(".pt").split("__")[1] for f in os.listdir(f"{self.drive_dir}/Models/") if f.endswith(".pt") and f.startswith(self.algo)]
         ts_lst = sorted(ts_lst, reverse=True)
         if len(ts_lst) == 0:
             return None, None
         ts = ts_lst[0]
-        model = torch.load(f"{drive_dir}/Models/{self.algo}__{ts}.pt")
+        model = torch.load(f"{self.drive_dir}/Models/{self.algo}__{ts}.pt")
         model = model.to(device = DEVICE)
         return model, ts
 
@@ -471,7 +489,7 @@ class LossFactory():
         return loss_arr
     
     def clearing_loss(self, phi_dot_stn, power = 2):
-        loss = torch.abs(torch.sum(phi_dot_stn, axis = 2)) ** power
+        loss = torch.abs(torch.sum(phi_dot_stn, axis = 2) / N_AGENT) ** power
         return torch.mean(loss)
     
     def clearing_loss_phi(self, phi_stn, power = 2):
@@ -564,7 +582,7 @@ def visualize_infer(x_arr, y_arr_lst, name, xname, yname, label_lst, title = "")
     plt.close()
 
 ## Visualize the comparison of dynamics
-def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment = None):
+def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment = None, expand = True):
     assert name in ["phi", "phi_dot", "phi_dot_short", "sigma", "mu", "s"]
     round += 1
     if name == "phi":
@@ -585,7 +603,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         title2 = title
     if name == "phi_dot_short":
         title2 = title
-    if name == "phi_dot":
+    if name == "phi_dot" and expand:
         size = arr_lst[0].cpu().detach().numpy().shape
         if len(size) == 1:
             size = 1
@@ -610,7 +628,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
             ax.set_title(title2)
             ax.grid()
             box2 = ax.get_position()
-            ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+            #ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+            ax.legend(loc="lower left")
             plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_agent{i+1}_{ts}.png", bbox_inches='tight')
             plt.close()
     else:
@@ -633,11 +652,12 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         ax.set_title(title2)
         ax.grid()
         box2 = ax.get_position()
-        ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+        #ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+        ax.legend(loc="lower left")
         plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_{ts}.png", bbox_inches='tight')
         plt.close()
 
-def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False, clearing_known = True):
+def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver = "Adam", use_pretrained_gen = True, use_fast_var = False, clearing_known = True, drive_dir = "."):
     retrain = not use_pretrained_gen
     if not use_fast_var:
         input_dim = 4 #+ N_AGENT #2 + N_AGENT
@@ -651,10 +671,10 @@ def prepare_generator(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen
         output_dim += 1
     if clearing_known:
         input_dim -= 1
-    model_factory = ModelFactory(n_model, "generator", input_dim, gen_hidden_lst, output_dim, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain)
+    model_factory = ModelFactory(n_model, "generator", input_dim, gen_hidden_lst, output_dim, gen_lr, gen_decay, gen_scheduler_step, use_s0 = False, solver = gen_solver, retrain = retrain, drive_dir = drive_dir)
     return model_factory
 
-def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver = "Adam", use_pretrained_dis = True, use_true_mu = False, use_fast_var = False, clearing_known = True):
+def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver = "Adam", use_pretrained_dis = True, use_true_mu = False, use_fast_var = False, clearing_known = True, drive_dir = "."):
     n_model = T + 1
     if not use_true_mu:
         n_model += T
@@ -665,7 +685,7 @@ def prepare_discriminator(dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step,
         input_dim = 2 + N_AGENT
     if clearing_known:
         input_dim -= 1
-    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T)
+    model_factory = ModelFactory(n_model, "discriminator", input_dim, dis_hidden_lst, 1, dis_lr, dis_decay, dis_scheduler_step, use_s0 = True, solver = dis_solver, retrain = retrain, constant_len = T, drive_dir = drive_dir)
     return model_factory
 
 def prepare_combo(combo_hidden_lst, combo_lr, combo_decay, combo_scheduler_step, combo_solver = "Adam", use_pretrained_combo = True, use_true_mu = False, use_fast_var = False, clearing_known = True):
@@ -961,6 +981,76 @@ def inference(generator, discriminator, randomized = True, clearing_known = Fals
 def transfer_learning():
     pass
 
+def compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = False, use_fast_var = False, seed = 0, clearing_known = True, utility_power = 2, drive_dir = "."):
+    ## Generate Brownian paths for testing
+    torch.manual_seed(seed)
+    dW_st_eval = torch.normal(0, np.sqrt(DT), size = (N_SAMPLE, T))
+    F_exact, H_exact = get_FH_exact()
+    benchmark_name = "Ground Truth"
+    if utility_power != 2:
+        benchmark_name = "Leading Order"
+    model_factory_gen = prepare_generator(gen_hidden_lst, slc(gen_lr, 0), gen_decay, gen_scheduler_step, gen_solver = slc(gen_solver, 0), use_pretrained_gen = True, use_fast_var = use_fast_var, clearing_known = clearing_known, drive_dir = drive_dir)
+    model_factory_dis = prepare_discriminator(dis_hidden_lst, slc(dis_lr, 0), dis_decay, dis_scheduler_step, dis_solver = slc(dis_solver, 0), use_pretrained_dis = True, use_true_mu = use_true_mu, use_fast_var = use_fast_var, drive_dir = drive_dir)
+    generator, optimizer_gen, scheduler_gen, prev_ts_gen = model_factory_gen.prepare_model()
+    discriminator, optimizer_dis, scheduler_dis, prev_ts_dis = model_factory_dis.prepare_model()
+
+    dynamic_factory = DynamicFactory(dW_st_eval)
+    loss_factory = LossFactory(dW_st_eval)
+    phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
+    loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
+    loss_stock = loss_factory.stock_loss(stock_st, power = 2)
+    loss_clearing = loss_factory.clearing_loss(phi_dot_stn, power = 2)
+    if utility_power == 2:
+        phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
+    else:
+        phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
+    stock_st_frictionless = dynamic_factory.frictionless_stock()
+    mu_st_frictionless = dynamic_factory.frictionless_mu()
+    loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
+    loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, 0))
+    loss_truth_clearing = loss_factory.clearing_loss(phi_dot_stn_truth, power = 2)
+    return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility, loss_stock, loss_clearing, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility, loss_truth_stock, loss_truth_clearing
+
+def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_fast_var = False, seed = 0, clearing_known = False, utility_power = 2, **train_args):
+    drive_dir = f"{N_AGENT}agents_power{utility_power}"
+    phi_dot_stn_nomu, phi_stn_nomu, mu_st_nomu, sigma_st_nomu, stock_st_nomu, loss_utility_nomu, loss_stock_nomu, loss_clearing_nomu, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility, loss_truth_stock, loss_truth_clearing = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = False, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir + "_mu_unknown")
+    if utility_power == 2 or N_AGENT == 2:
+        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility, loss_stock, loss_clearing, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility, loss_truth_stock, loss_truth_clearing = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = True, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir)
+
+    visualize_obs = 0
+    if utility_power == 2:
+        benchmark_name = "Ground Truth"
+    else:
+        if N_AGENT == 2:
+            benchmark_name = "Leading Order"
+        else:
+            benchmark_name = "Frictionless"
+    if utility_power == 1.5 and N_AGENT > 2:
+        dct = {
+            "Neg Utility": [float(loss_utility_nomu.detach()), float(loss_truth_utility.detach())],
+            "Stock Loss": [float(loss_stock_nomu.detach()), float(loss_truth_stock.detach())],
+            "Clearing Loss": [float(loss_clearing_nomu.detach()), float(loss_truth_clearing.detach())],
+            "Type": ["Mu Unknown", benchmark_name]
+        }
+    else:
+        dct = {
+            "Neg Utility": [float(loss_utility_nomu.detach()), float(loss_utility.detach()), float(loss_truth_utility.detach())],
+            "Stock Loss": [float(loss_stock_nomu.detach()), float(loss_stock.detach()), float(loss_truth_stock.detach())],
+            "Clearing Loss": [float(loss_clearing_nomu.detach()), float(loss_clearing.detach()), float(loss_truth_clearing.detach())],
+            "Type": ["Mu Unknown", "Mu Known", benchmark_name]
+        }
+    df = pd.DataFrame.from_dict(dct)
+    df.to_csv(f"Tables/{drive_dir}.csv", index = False)
+    
+    if utility_power == 1.5 and N_AGENT > 2:
+        visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:]], 0, drive_dir, "mu", ["Mu Unknown"], comment = "")
+        visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:]], 0, drive_dir, "sigma", ["Mu Unknown"], comment = "")
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in range(N_AGENT)], 0, drive_dir, "phi_dot", [f"Agent {agent}" for agent in range(N_AGENT)], comment = "", expand = False)
+    else:
+        visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:], mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], 0, drive_dir, "mu", ["Mu Unknown", "Mu Known", benchmark_name], comment = "")
+        visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:], sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], 0, drive_dir, "sigma", ["Mu Unknown", "Mu Known", benchmark_name], comment = "")
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["Mu Unknown", "Mu Known", benchmark_name], comment = "")
+
 ## Begin Training
 train_args = {
     "gen_hidden_lst": [50, 50, 50],
@@ -973,7 +1063,7 @@ train_args = {
     "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
     "dis_epoch": [500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 2],
-    "utility_power": 1.5, #2,
+    "utility_power": COST_POWER, #2,
     "dis_decay": 0.1,
     "dis_scheduler_step": 20000,
     "combo_lr": [1e-3],
@@ -1003,5 +1093,6 @@ train_args = {
     "use_combo": False,
     "clearing_known": False
 }
-generator, discriminator = training_pipeline(train_args = train_args, **train_args)
+# generator, discriminator = training_pipeline(train_args = train_args, **train_args)
 # inference(generator, discriminator, randomized = False, clearing_known = train_args["clearing_known"])
+plot_all_trajectories(**train_args)
