@@ -25,8 +25,8 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 5
-COST_POWER = 1.5
+N_AGENT = 10
+COST_POWER = 2
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
@@ -264,6 +264,7 @@ class ModelFactory:
         if len(ts_lst) == 0:
             return None, None
         ts = ts_lst[0]
+        print(f"Loading {self.drive_dir}/Models/{self.algo}__{ts}.pt")
         model = torch.load(f"{self.drive_dir}/Models/{self.algo}__{ts}.pt")
         model = model.to(device = DEVICE)
         return model, ts
