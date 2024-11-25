@@ -25,8 +25,8 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 10
-COST_POWER = 2
+N_AGENT = 5
+COST_POWER = 1.5
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
@@ -488,10 +488,24 @@ class LossFactory():
             loss_curr = (torch.mean(-(mu_st * phi_stn[:,:-1,n]) + GAMMA_LIST[n] / 2 * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n]) ** 2 + LAM / 2 * torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 0) / 1) / 1
             loss_arr += loss_curr
         return loss_arr
+
+    def utility_loss_stats(self, phi_dot_stn, phi_stn, mu_st, sigma_st, power = 2):
+        n_sample = phi_stn.shape[0]
+        loss_arr = torch.zeros(n_sample)
+        for n in range(N_AGENT):
+            loss_curr = (torch.mean(-(mu_st * phi_stn[:,:-1,n]) + GAMMA_LIST[n] / 2 * (sigma_st * phi_stn[:,:-1,n] + self.W_st[:,:-1] * XI_LIST[n]) ** 2 + LAM / 2 * torch.abs(phi_dot_stn[:,:,n]) ** power, axis = 1) / self.T) / N_AGENT
+            loss_arr += loss_curr
+        loss_mean, loss_se = torch.mean(loss_arr), torch.std(loss_arr) / (n_sample ** 0.5)
+        return loss_mean, loss_se
     
     def clearing_loss(self, phi_dot_stn, power = 2):
         loss = torch.abs(torch.sum(phi_dot_stn, axis = 2) / N_AGENT) ** power
         return torch.mean(loss)
+
+    def clearing_loss_stats(self, phi_dot_stn, power = 2):
+        n_sample = phi_dot_stn.shape[0]
+        loss_arr = torch.mean(torch.abs(torch.sum(phi_dot_stn, axis = 2) / N_AGENT) ** power, axis = 1)
+        return torch.mean(loss_arr), torch.std(loss_arr) / (n_sample ** 0.5)
     
     def clearing_loss_phi(self, phi_stn, power = 2):
         loss = torch.abs(torch.sum(phi_stn, axis = 2) - S) ** power
@@ -540,6 +554,12 @@ class LossFactory():
         target = BETA * TR + ALPHA * self.W_st[:,-1]
         loss = torch.abs(stock_st[:,-1] - target) ** power
         return torch.mean(loss)
+
+    def stock_loss_stats(self, stock_st, power = 2):
+        n_sample = stock_st.shape[0]
+        target = BETA * TR + ALPHA * self.W_st[:,-1]
+        loss_arr = torch.abs(stock_st[:,-1] - target) ** power
+        return torch.mean(loss_arr), torch.std(loss_arr) / (n_sample ** 0.5)
     
     def stock_loss_init(self, stock_st, power = 2):
         target = (BETA - GAMMA_BAR * ALPHA ** 2 * S) * TR
@@ -998,25 +1018,27 @@ def compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, ge
     dynamic_factory = DynamicFactory(dW_st_eval)
     loss_factory = LossFactory(dW_st_eval)
     phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st = dynamic_factory.deep_hedging(generator, discriminator, use_true_mu = use_true_mu, use_fast_var = use_fast_var, clearing_known = clearing_known, F_exact = F_exact, H_exact = H_exact)
-    loss_utility = loss_factory.utility_loss(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power) * S_VAL
-    loss_stock = loss_factory.stock_loss(stock_st, power = 2)
-    loss_clearing = loss_factory.clearing_loss(phi_dot_stn, power = 2)
+    loss_utility_mean, loss_utility_se = loss_factory.utility_loss_stats(phi_dot_stn, phi_stn, mu_st, sigma_st, power = utility_power)
+    loss_utility_mean, loss_utility_se = loss_utility_mean * S_VAL, loss_utility_se * S_VAL
+    loss_stock_mean, loss_stock_se = loss_factory.stock_loss_stats(stock_st, power = 2)
+    loss_clearing_mean, loss_clearing_se = loss_factory.clearing_loss_stats(phi_dot_stn, power = 2)
     if utility_power == 2:
         phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.ground_truth(F_exact, H_exact)
     else:
         phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth = dynamic_factory.leading_order(power = utility_power)
     stock_st_frictionless = dynamic_factory.frictionless_stock()
     mu_st_frictionless = dynamic_factory.frictionless_mu()
-    loss_truth_utility = loss_factory.utility_loss(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power) * S_VAL
-    loss_truth_stock = loss_factory.stock_loss(stock_st_truth, power = slc(dis_loss, 0))
-    loss_truth_clearing = loss_factory.clearing_loss(phi_dot_stn_truth, power = 2)
-    return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility, loss_stock, loss_clearing, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility, loss_truth_stock, loss_truth_clearing
+    loss_truth_utility_mean, loss_truth_utility_se = loss_factory.utility_loss_stats(phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, power = utility_power)
+    loss_truth_utility_mean, loss_truth_utility_se = loss_truth_utility_mean * S_VAL, loss_truth_utility_se * S_VAL
+    loss_truth_stock_mean, loss_truth_stock_se = loss_factory.stock_loss_stats(stock_st_truth, power = slc(dis_loss, 0))
+    loss_truth_clearing_mean, loss_truth_clearing_se = loss_factory.clearing_loss_stats(phi_dot_stn_truth, power = 2)
+    return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility_mean, loss_utility_se, loss_stock_mean, loss_stock_se, loss_clearing_mean, loss_clearing_se, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility_mean, loss_truth_utility_se, loss_truth_stock_mean, loss_truth_stock_se, loss_truth_clearing_mean, loss_truth_clearing_se
 
 def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_fast_var = False, seed = 0, clearing_known = False, utility_power = 2, **train_args):
     drive_dir = f"{N_AGENT}agents_power{utility_power}"
-    phi_dot_stn_nomu, phi_stn_nomu, mu_st_nomu, sigma_st_nomu, stock_st_nomu, loss_utility_nomu, loss_stock_nomu, loss_clearing_nomu, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility, loss_truth_stock, loss_truth_clearing = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = False, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir + "_mu_unknown")
+    phi_dot_stn_nomu, phi_stn_nomu, mu_st_nomu, sigma_st_nomu, stock_st_nomu, loss_utility_mean_nomu, loss_utility_se_nomu, loss_stock_mean_nomu, loss_stock_se_nomu, loss_clearing_mean_nomu, loss_clearing_se_nomu, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility_mean, loss_truth_utility_se, loss_truth_stock_mean, loss_truth_stock_se, loss_truth_clearing_mean, loss_truth_clearing_se = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = False, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir + "_mu_unknown")
     if utility_power == 2 or N_AGENT == 2:
-        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility, loss_stock, loss_clearing, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility, loss_truth_stock, loss_truth_clearing = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = True, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir)
+        phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility_mean, loss_utility_se, loss_stock_mean, loss_stock_se, loss_clearing_mean, loss_clearing_se, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility_mean, loss_truth_utility_se, loss_truth_stock_mean, loss_truth_stock_se, loss_truth_clearing_mean, loss_truth_clearing_se = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = True, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir)
 
     visualize_obs = 0
     if utility_power == 2:
@@ -1028,16 +1050,22 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
             benchmark_name = "Frictionless"
     if utility_power == 1.5 and N_AGENT > 2:
         dct = {
-            "Neg Utility": [float(loss_utility_nomu.detach()), float(loss_truth_utility.detach())],
-            "Stock Loss": [float(loss_stock_nomu.detach()), float(loss_truth_stock.detach())],
-            "Clearing Loss": [float(loss_clearing_nomu.detach()), float(loss_truth_clearing.detach())],
+            "Neg Utility Mean": [float(loss_utility_mean_nomu.detach()), float(loss_truth_utility_mean.detach())],
+            "Stock Loss Mean": [float(loss_stock_mean_nomu.detach()), float(loss_truth_stock_mean.detach())],
+            "Clearing Loss Mean": [float(loss_clearing_mean_nomu.detach()), float(loss_truth_clearing_mean.detach())],
+            "Neg Utility SE": [float(loss_utility_se_nomu.detach()), float(loss_truth_utility_se.detach())],
+            "Stock Loss SE": [float(loss_stock_se_nomu.detach()), float(loss_truth_stock_se.detach())],
+            "Clearing Loss SE": [float(loss_clearing_se_nomu.detach()), float(loss_truth_clearing_se.detach())],
             "Type": ["Mu Unknown", benchmark_name]
         }
     else:
         dct = {
-            "Neg Utility": [float(loss_utility_nomu.detach()), float(loss_utility.detach()), float(loss_truth_utility.detach())],
-            "Stock Loss": [float(loss_stock_nomu.detach()), float(loss_stock.detach()), float(loss_truth_stock.detach())],
-            "Clearing Loss": [float(loss_clearing_nomu.detach()), float(loss_clearing.detach()), float(loss_truth_clearing.detach())],
+            "Neg Utility Mean": [float(loss_utility_mean_nomu.detach()), float(loss_utility_mean.detach()), float(loss_truth_utility_mean.detach())],
+            "Stock Loss Mean": [float(loss_stock_mean_nomu.detach()), float(loss_stock_mean.detach()), float(loss_truth_stock_mean.detach())],
+            "Clearing Loss Mean": [float(loss_clearing_mean_nomu.detach()), float(loss_clearing_mean.detach()), float(loss_truth_clearing_mean.detach())],
+            "Neg Utility SE": [float(loss_utility_se_nomu.detach()), float(loss_utility_se.detach()), float(loss_truth_utility_se.detach())],
+            "Stock Loss SE": [float(loss_stock_se_nomu.detach()), float(loss_stock_se.detach()), float(loss_truth_stock_se.detach())],
+            "Clearing Loss SE": [float(loss_clearing_se_nomu.detach()), float(loss_clearing_se.detach()), float(loss_truth_clearing_se.detach())],
             "Type": ["Mu Unknown", "Mu Known", benchmark_name]
         }
     df = pd.DataFrame.from_dict(dct)
