@@ -25,16 +25,20 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 5
-COST_POWER = 1.5
+N_AGENT = 10
+COST_POWER = 2
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
 
 if COST_POWER == 2:
     TR = 0.2
-    XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10)
-    GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
+    if N_AGENT == 10:
+        XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10)
+        GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
+    elif N_AGENT == 5:
+        XI_LIST = torch.tensor([-3, -2, -2, 3, 4]).float() * (-1)
+        GAMMA_LIST = torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE)
 else:
     if N_AGENT == 2:
         TR = 0.4
@@ -674,7 +678,10 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         ax.grid()
         box2 = ax.get_position()
         #ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
-        ax.legend(loc="lower left")
+        if name in ["phi", "phi_dot"]:
+            ax.legend(loc="upper left")
+        else:
+            ax.legend(loc="lower left")
         plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_{ts}.png", bbox_inches='tight')
         plt.close()
 
@@ -1072,13 +1079,16 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
     df.to_csv(f"Tables/{drive_dir}.csv", index = False)
     
     if utility_power == 1.5 and N_AGENT > 2:
-        visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:]], 0, drive_dir, "mu", ["Mu Unknown"], comment = "")
-        visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:]], 0, drive_dir, "sigma", ["Mu Unknown"], comment = "")
+        visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:]], 0, drive_dir, "mu", ["$\mu$ Unknown"], comment = "")
+        visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:]], 0, drive_dir, "sigma", ["$\mu$ Unknown"], comment = "")
         visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in range(N_AGENT)], 0, drive_dir, "phi_dot", [f"Agent {agent}" for agent in range(N_AGENT)], comment = "", expand = False)
     else:
-        visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:], mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], 0, drive_dir, "mu", ["Mu Unknown", "Mu Known", benchmark_name], comment = "")
-        visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:], sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], 0, drive_dir, "sigma", ["Mu Unknown", "Mu Known", benchmark_name], comment = "")
-        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["Mu Unknown", "Mu Known", benchmark_name], comment = "")
+        visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:], mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], 0, drive_dir, "mu", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
+        visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:], sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], 0, drive_dir, "sigma", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
+        if utility_power == 1.5:
+            visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in range(N_AGENT)] + [phi_dot_stn[visualize_obs,:,agent] for agent in range(N_AGENT)] + [phi_dot_stn_truth[visualize_obs,:,agent] for agent in range(N_AGENT)], 0, drive_dir, "phi_dot", [f"$\mu$ Unknown - Agent {agent}" for agent in range(N_AGENT)] + [f"$\mu$ Known - Agent {agent}" for agent in range(N_AGENT)] + [f"{benchmark_name} - Agent {agent}" for agent in range(N_AGENT)], comment = "", expand = False)
+        else:
+            visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
 
 ## Begin Training
 train_args = {
