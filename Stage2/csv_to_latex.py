@@ -87,7 +87,7 @@ def csv_to_latex_table(csv_file, output_file=None, table_name = "10agents_power2
         print(latex_code_str)
 
 # Example usage
-for table_name in ["10agents_power2", "2agents_power1.5", "5agents_power1.5"]:
+for table_name in ["5agents_power2", "10agents_power2", "2agents_power1.5", "5agents_power1.5"]:
     csv_file = f"Tables/{table_name}.csv"  # Replace with your CSV file path
     output_file = f"Tables/{table_name}.txt"  # Replace with desired output file path, or set to None to print
     csv_to_latex_table(csv_file, output_file, table_name = table_name)
