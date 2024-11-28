@@ -25,8 +25,8 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 2
-COST_POWER = 1.5
+N_AGENT = 10
+COST_POWER = 2
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
@@ -628,7 +628,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         title2 = title
     if name == "phi_dot_short":
         title2 = title
-    if name == "phi_dot" and expand:
+    if name in ["phi_dot", "phi"] and expand:
         size = arr_lst[0].cpu().detach().numpy().shape
         if len(size) == 1:
             size = 1
@@ -1090,8 +1090,8 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
         visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in range(N_AGENT)] + [phi_dot_stn[visualize_obs,:,agent] for agent in range(N_AGENT)] + [phi_dot_stn_truth[visualize_obs,:,agent] for agent in range(N_AGENT)], 0, drive_dir, "phi_dot", [f"$\mu$ Unknown - Agent {agent}" for agent in range(N_AGENT)] + [f"$\mu$ Known - Agent {agent}" for agent in range(N_AGENT)] + [f"{benchmark_name} - Agent {agent}" for agent in range(N_AGENT)], comment = "", expand = False)
         visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1,agent] for agent in range(N_AGENT)] + [phi_stn[visualize_obs,:-1,agent] for agent in range(N_AGENT)] + [phi_stn_truth[visualize_obs,:-1,agent] for agent in range(N_AGENT)], 0, drive_dir, "phi", [f"$\mu$ Unknown - Agent {agent}" for agent in range(N_AGENT)] + [f"$\mu$ Known - Agent {agent}" for agent in range(N_AGENT)] + [f"{benchmark_name} - Agent {agent}" for agent in range(N_AGENT)], comment = "", expand = False)
         # else:
-        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
-        visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1], phi_stn[visualize_obs,:-1], phi_stn_truth[visualize_obs,:-1]], 0, drive_dir, "phi", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "", expand = True)
+        visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1], phi_stn[visualize_obs,:-1], phi_stn_truth[visualize_obs,:-1]], 0, drive_dir, "phi", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "", expand = True)
 
 ## Begin Training
 train_args = {
