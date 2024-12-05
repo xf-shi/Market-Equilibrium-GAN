@@ -25,8 +25,8 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 10
-COST_POWER = 2
+N_AGENT = 2
+COST_POWER = 1.5
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
@@ -52,9 +52,9 @@ else:
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
-N_SAMPLE = 500 #128 #128
+N_SAMPLE = 3000 #500 #128 #128
 ALPHA = 1 #1 #
-BETA = 1 #0.5
+BETA = 0.3 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
 # KAPPA = 2.
 
@@ -84,7 +84,7 @@ assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-
 GAMMA_BAR = 1 / torch.sum(1 / GAMMA_LIST)
 GAMMA_MAX = torch.max(GAMMA_LIST)
 N_AGENT = len(XI_LIST)
-BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
+# BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
 
 ## Setup Numpy Counterparts
 GAMMA_LIST_NP = GAMMA_LIST.cpu().numpy().reshape((1, N_AGENT))
@@ -678,10 +678,11 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         ax.grid()
         box2 = ax.get_position()
         #ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
-        if name in ["phi", "phi_dot"]:
-            ax.legend(loc="upper left")
-        else:
-            ax.legend(loc="lower left")
+        # if name in ["phi", "phi_dot"]:
+        #     ax.legend(loc="upper left")
+        # else:
+        #     ax.legend(loc="lower left")
+        ax.legend()
         plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_{ts}.png", bbox_inches='tight')
         plt.close()
 

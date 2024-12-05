@@ -5,11 +5,11 @@
         \multicolumn{2}{c|}{Neg Utility} & \multicolumn{2}{c|}{Clearing Loss} & \multicolumn{2}{c|}{Stock Loss} & Type \\
         Mean & S.E & Mean & S.E & Mean & S.E &   \\
         \hline
-        $2.15 \times 10^{-1}$ & $1.17 \times 10^{-5}$ & $2.05 \times 10^{-1}$ & $8.38 \times 10^{-3}$ & $1.12 \times 10^{-6}$ & $4.59 \times 10^{-3}$ & Mu Unknown \\
+        $2.09 \times 10^{-1}$ & $2.25 \times 10^{-6}$ & $7.96 \times 10^{-5}$ & $3.27 \times 10^{-3}$ & $9.31 \times 10^{-8}$ & $1.17 \times 10^{-6}$ & Mu Unknown \\
         \hline
-        $2.14 \times 10^{-1}$ & $2.35 \times 10^{-5}$ & $2.07 \times 10^{-6}$ & $8.40 \times 10^{-3}$ & $2.71 \times 10^{-6}$ & $1.83 \times 10^{-8}$ & Mu Known \\
+        $2.10 \times 10^{-1}$ & $2.37 \times 10^{-5}$ & $2.16 \times 10^{-3}$ & $3.30 \times 10^{-3}$ & $1.03 \times 10^{-6}$ & $3.30 \times 10^{-5}$ & Mu Known \\
         \hline
-        $2.13 \times 10^{-1}$ & $1.28 \times 10^{-16}$ & $2.51 \times 10^{-13}$ & $8.01 \times 10^{-3}$ & $2.96 \times 10^{-17}$ & $1.02 \times 10^{-14}$ & Ground Truth \\
+        $2.08 \times 10^{-1}$ & $2.02 \times 10^{-21}$ & $2.47 \times 10^{-13}$ & $3.14 \times 10^{-3}$ & $7.64 \times 10^{-22}$ & $3.84 \times 10^{-15}$ & Ground Truth \\
         \hline
     \end{tabular}
     \caption{Quadratic Cost 10 Agents}

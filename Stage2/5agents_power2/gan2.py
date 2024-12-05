@@ -54,7 +54,7 @@ TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
 N_SAMPLE = 500 #128 #128
 ALPHA = 1 #1 #
-BETA = 1 #0.5
+BETA = 0.3 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
 # KAPPA = 2.
 
@@ -84,7 +84,7 @@ assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-
 GAMMA_BAR = 1 / torch.sum(1 / GAMMA_LIST)
 GAMMA_MAX = torch.max(GAMMA_LIST)
 N_AGENT = len(XI_LIST)
-BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
+# BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
 
 ## Setup Numpy Counterparts
 GAMMA_LIST_NP = GAMMA_LIST.cpu().numpy().reshape((1, N_AGENT))
@@ -1093,8 +1093,8 @@ train_args = {
     "gen_epoch": [500, 1000, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 10000,
-    "dis_lr": [1e-3],#[1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
-    "dis_epoch": [40000],#[500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
+    "dis_epoch": [500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 2],
     "utility_power": COST_POWER, #2,
     "dis_decay": 0.1,
@@ -1110,10 +1110,10 @@ train_args = {
     "gen_solver": ["Adam"],
     "dis_solver": ["Adam"],
     "combo_solver": ["Adam"],
-    "total_rounds": 1,#10,
+    "total_rounds": 10,#10,
     "normalize_up_to": 100,
     "visualize_obs": 0,
-    "train_gen": False,
+    "train_gen": True,
     "train_dis": True,
     "use_pretrained_gen": True,
     "use_pretrained_dis": True,

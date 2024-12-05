@@ -50,7 +50,7 @@ TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
 N_SAMPLE = 500 #128 #128
 ALPHA = 1 #1 #
-BETA = 1 #0.5
+BETA = 0.3 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
 # KAPPA = 2.
 
@@ -80,7 +80,7 @@ assert len(XI_LIST) == len(GAMMA_LIST) and torch.max(GAMMA_LIST) == GAMMA_LIST[-
 GAMMA_BAR = 1 / torch.sum(1 / GAMMA_LIST)
 GAMMA_MAX = torch.max(GAMMA_LIST)
 N_AGENT = len(XI_LIST)
-BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
+# BETA = GAMMA_BAR*S*ALPHA**2 + S_TERMINAL/TR
 
 ## Setup Numpy Counterparts
 GAMMA_LIST_NP = GAMMA_LIST.cpu().numpy().reshape((1, N_AGENT))
@@ -1093,6 +1093,6 @@ train_args = {
     "use_combo": False,
     "clearing_known": False
 }
-# generator, discriminator = training_pipeline(train_args = train_args, **train_args)
+generator, discriminator = training_pipeline(train_args = train_args, **train_args)
 # inference(generator, discriminator, randomized = False, clearing_known = train_args["clearing_known"])
-plot_all_trajectories(**train_args)
+# plot_all_trajectories(**train_args)

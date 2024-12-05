@@ -5,9 +5,9 @@
         \multicolumn{2}{c|}{Neg Utility} & \multicolumn{2}{c|}{Clearing Loss} & \multicolumn{2}{c|}{Stock Loss} & Type \\
         Mean & S.E & Mean & S.E & Mean & S.E &   \\
         \hline
-        $2.10 \times 10^{-3}$ & $3.99 \times 10^{-6}$ & $2.05 \times 10^{-6}$ & $7.71 \times 10^{-5}$ & $2.69 \times 10^{-7}$ & $2.50 \times 10^{-8}$ & Mu Unknown \\
+        $2.11 \times 10^{-3}$ & $2.25 \times 10^{-5}$ & $5.30 \times 10^{-4}$ & $3.06 \times 10^{-5}$ & $5.69 \times 10^{-7}$ & $9.19 \times 10^{-6}$ & Mu Unknown \\
         \hline
-        $2.16 \times 10^{-2}$ & $1.14 \times 10^{-15}$ & $1.59 \times 10^{-11}$ & $1.00 \times 10^{-4}$ & $1.21 \times 10^{-16}$ & $4.51 \times 10^{-13}$ & Frictionless \\
+        $2.16 \times 10^{-2}$ & $0.00 \times 10^{0}$ & $1.57 \times 10^{-11}$ & $4.34 \times 10^{-5}$ & $0.00 \times 10^{0}$ & $1.69 \times 10^{-13}$ & Frictionless \\
         \hline
     \end{tabular}
     \caption{Power 1.5 Cost 5 Agents}
