@@ -653,8 +653,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
             ax.set_title(title2)
             ax.grid()
             box2 = ax.get_position()
-            #ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
-            ax.legend(loc="lower left")
+            ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+#            ax.legend(loc="lower left")
             plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_agent{i+1}_{ts}.png", bbox_inches='tight')
             plt.close()
     else:
@@ -677,12 +677,12 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         ax.set_title(title2)
         ax.grid()
         box2 = ax.get_position()
-        #ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+        ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
         # if name in ["phi", "phi_dot"]:
         #     ax.legend(loc="upper left")
         # else:
         #     ax.legend(loc="lower left")
-        ax.legend()
+#        ax.legend()
         plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_{ts}.png", bbox_inches='tight')
         plt.close()
 
