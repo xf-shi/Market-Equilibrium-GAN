@@ -25,7 +25,7 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 10
+N_AGENT = 5
 COST_POWER = 2
 
 ## Global Constants

@@ -9,7 +9,7 @@
         \hline
         $2.10 \times 10^{-1}$ & $2.37 \times 10^{-5}$ & $2.16 \times 10^{-3}$ & $3.30 \times 10^{-3}$ & $1.03 \times 10^{-6}$ & $3.30 \times 10^{-5}$ & Mu Known \\
         \hline
-        $2.08 \times 10^{-1}$ & $2.02 \times 10^{-21}$ & $2.47 \times 10^{-13}$ & $3.14 \times 10^{-3}$ & $7.64 \times 10^{-22}$ & $3.84 \times 10^{-15}$ & Ground Truth \\
+        $2.08 \times 10^{-1}$ & $2.02 \times 10^{-21}$ & $2.47 \times 10^{-13}$ & $3.14 \times 10^{-3}$ & $7.64 \times 10^{-22}$ & $3.90 \times 10^{-15}$ & Ground Truth \\
         \hline
     \end{tabular}
     \caption{Quadratic Cost 10 Agents}

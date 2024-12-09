@@ -9,7 +9,7 @@
         \hline
         $3.75 \times 10^{-4}$ & $2.72 \times 10^{-5}$ & $1.07 \times 10^{-2}$ & $2.21 \times 10^{-5}$ & $6.75 \times 10^{-7}$ & $3.23 \times 10^{-7}$ & Mu Known \\
         \hline
-        $8.94 \times 10^{-4}$ & $5.94 \times 10^{-18}$ & $1.88 \times 10^{-11}$ & $1.70 \times 10^{-5}$ & $3.13 \times 10^{-19}$ & $5.61 \times 10^{-13}$ & Leading Order \\
+        $8.94 \times 10^{-4}$ & $5.75 \times 10^{-18}$ & $1.89 \times 10^{-11}$ & $1.70 \times 10^{-5}$ & $3.09 \times 10^{-19}$ & $5.66 \times 10^{-13}$ & Leading Order \\
         \hline
     \end{tabular}
     \caption{Power 1.5 Cost 2 Agents}
