@@ -15,3 +15,20 @@
     \caption{Power 1.5 Cost 2 Agents}
     \label{tab:power-2}
 \end{table}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{|c|c|}
+        \hline
+        S0 & Type \\
+        \hline
+        $-2.21 \times 10^{-1}$ & Mu Unknown \\
+        \hline
+        $-2.34 \times 10^{-1}$ & Mu Known \\
+        \hline
+        $-1.85 \times 10^{-1}$ & Leading Order \\
+        \hline
+    \end{tabular}
+    \caption{Power 1.5 Cost 2 Agents $S_0$}
+    \label{tab:power-s0-2}
+\end{table}

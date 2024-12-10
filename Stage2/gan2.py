@@ -1045,8 +1045,11 @@ def compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, ge
 def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_fast_var = False, seed = 0, clearing_known = False, utility_power = 2, **train_args):
     drive_dir = f"{N_AGENT}agents_power{utility_power}"
     phi_dot_stn_nomu, phi_stn_nomu, mu_st_nomu, sigma_st_nomu, stock_st_nomu, loss_utility_mean_nomu, loss_utility_se_nomu, loss_stock_mean_nomu, loss_stock_se_nomu, loss_clearing_mean_nomu, loss_clearing_se_nomu, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility_mean, loss_truth_utility_se, loss_truth_stock_mean, loss_truth_stock_se, loss_truth_clearing_mean, loss_truth_clearing_se = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = False, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir + "_mu_unknown")
+    s0_nomu = torch.mean(stock_st_nomu[:,0])
+    s0_truth = torch.mean(stock_st_truth[:,0])
     if utility_power == 2 or N_AGENT == 2:
         phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st, loss_utility_mean, loss_utility_se, loss_stock_mean, loss_stock_se, loss_clearing_mean, loss_clearing_se, phi_dot_stn_truth, phi_stn_truth, mu_st_truth, sigma_st_truth, stock_st_truth, loss_truth_utility_mean, loss_truth_utility_se, loss_truth_stock_mean, loss_truth_stock_se, loss_truth_clearing_mean, loss_truth_clearing_se = compute_trajectory(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step, gen_solver, dis_hidden_lst, dis_lr, dis_decay, dis_scheduler_step, dis_solver, dis_loss, use_true_mu = True, use_fast_var = use_fast_var, seed = seed, clearing_known = clearing_known, utility_power = utility_power, drive_dir = drive_dir)
+        s0 = torch.mean(stock_st[:,0])
 
     visualize_obs = 0
     if utility_power == 2:
@@ -1064,6 +1067,7 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
             "Neg Utility SE": [float(loss_utility_se_nomu.detach()), float(loss_truth_utility_se.detach())],
             "Stock Loss SE": [float(loss_stock_se_nomu.detach()), float(loss_truth_stock_se.detach())],
             "Clearing Loss SE": [float(loss_clearing_se_nomu.detach()), float(loss_truth_clearing_se.detach())],
+            "S0": [float(s0_nomu.detach()), float(s0_truth.detach())],
             "Type": ["Mu Unknown", benchmark_name]
         }
     else:
@@ -1074,6 +1078,7 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
             "Neg Utility SE": [float(loss_utility_se_nomu.detach()), float(loss_utility_se.detach()), float(loss_truth_utility_se.detach())],
             "Stock Loss SE": [float(loss_stock_se_nomu.detach()), float(loss_stock_se.detach()), float(loss_truth_stock_se.detach())],
             "Clearing Loss SE": [float(loss_clearing_se_nomu.detach()), float(loss_clearing_se.detach()), float(loss_truth_clearing_se.detach())],
+            "S0": [float(s0_nomu.detach()), float(s0.detach()), float(s0_truth.detach())],
             "Type": ["Mu Unknown", "Mu Known", benchmark_name]
         }
     df = pd.DataFrame.from_dict(dct)
