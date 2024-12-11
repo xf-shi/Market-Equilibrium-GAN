@@ -26,7 +26,7 @@ else:
 
 ## Regimes
 N_AGENT = 5
-COST_POWER = 2
+COST_POWER = 1.5
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
@@ -1086,8 +1086,10 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
     
     if N_AGENT == 2:
         AGENT_LST = [0, 1]
-    else:
+    elif utility_power == 2:
         AGENT_LST = [0, 3]
+    else:
+        AGENT_LST = list(range(N_AGENT))
     if utility_power == 1.5 and N_AGENT > 2:
         visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:]], 0, drive_dir, "mu", ["$\mu$ Unknown"], comment = "")
         visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:]], 0, drive_dir, "sigma", ["$\mu$ Unknown"], comment = "")
