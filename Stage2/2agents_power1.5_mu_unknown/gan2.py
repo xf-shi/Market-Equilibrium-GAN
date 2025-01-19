@@ -54,7 +54,7 @@ TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
 N_SAMPLE = 500 #128 #128
 ALPHA = 1 #1 #
-BETA = 0.3 #0.5
+BETA = 2#0.3 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
 # KAPPA = 2.
 

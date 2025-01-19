@@ -54,7 +54,7 @@ TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
 DT = TR / T
 N_SAMPLE = 500 #128 #128
 ALPHA = 1 #1 #
-BETA = 0.3 #0.5
+BETA = 2#0.3 #0.5
 # GAMMA_BAR = 8.30864e-14 * S_VAL
 # KAPPA = 2.
 
@@ -1089,12 +1089,12 @@ train_args = {
     "gen_hidden_lst": [50, 50, 50],
     "dis_hidden_lst": [50, 50, 50],
     "combo_hidden_lst": [50, 50, 50],
-    "gen_lr": [1e-2],#[1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
-    "gen_epoch": [30000],#[500, 1000, 1000, 10000],#[500, 1000, 10000, 50000],
+    "gen_lr": [1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
+    "gen_epoch": [500, 1000, 1000, 10000],#[500, 1000, 10000, 50000],
     "gen_decay": 0.1,
     "gen_scheduler_step": 10000,
-    "dis_lr": [1e-2],#[1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
-    "dis_epoch": [60000],#[500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
+    "dis_lr": [1e-3, 1e-2, 1e-2, 1e-2, 1e-2, 1e-3],
+    "dis_epoch": [40000, 500, 1000, 1000, 10000],#[500, 2000, 10000, 50000],
     "dis_loss": [2, 2, 2],
     "utility_power": COST_POWER, #2,
     "dis_decay": 0.1,
