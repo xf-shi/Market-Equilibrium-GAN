@@ -5,9 +5,9 @@
         \multicolumn{2}{c|}{Neg Utility} & \multicolumn{2}{c|}{Clearing Loss} & \multicolumn{2}{c|}{Stock Loss} & Type \\
         Mean & S.E & Mean & S.E & Mean & S.E &   \\
         \hline
-        $5.55 \times 10^{-4}$ & $4.63 \times 10^{-1}$ & $1.23 \times 10^{-6}$ & $2.22 \times 10^{-5}$ & $6.89 \times 10^{-5}$ & $5.04 \times 10^{-9}$ & Mu Unknown \\
+        $5.62 \times 10^{-4}$ & $1.30 \times 10^{-5}$ & $2.19 \times 10^{-6}$ & $2.21 \times 10^{-5}$ & $3.38 \times 10^{-7}$ & $6.54 \times 10^{-9}$ & Mu Unknown \\
         \hline
-        $3.75 \times 10^{-4}$ & $4.62 \times 10^{-1}$ & $1.07 \times 10^{-2}$ & $2.21 \times 10^{-5}$ & $1.28 \times 10^{-4}$ & $3.23 \times 10^{-7}$ & Mu Known \\
+        $3.74 \times 10^{-4}$ & $2.71 \times 10^{-5}$ & $1.07 \times 10^{-2}$ & $2.21 \times 10^{-5}$ & $6.72 \times 10^{-7}$ & $3.24 \times 10^{-7}$ & Mu Known \\
         \hline
         $8.94 \times 10^{-4}$ & $1.20 \times 10^{-16}$ & $1.88 \times 10^{-11}$ & $1.70 \times 10^{-5}$ & $8.40 \times 10^{-18}$ & $5.61 \times 10^{-13}$ & Leading Order \\
         \hline
@@ -22,9 +22,9 @@
         \hline
         S0 & Type \\
         \hline
-        $-2.21 \times 10^{-1}$ & Mu Unknown \\
+        $4.58 \times 10^{-1}$ & Mu Unknown \\
         \hline
-        $-2.34 \times 10^{-1}$ & Mu Known \\
+        $4.46 \times 10^{-1}$ & Mu Known \\
         \hline
         $4.95 \times 10^{-1}$ & Leading Order \\
         \hline

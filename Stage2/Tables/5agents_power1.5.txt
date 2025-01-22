@@ -5,7 +5,7 @@
         \multicolumn{2}{c|}{Neg Utility} & \multicolumn{2}{c|}{Clearing Loss} & \multicolumn{2}{c|}{Stock Loss} & Type \\
         Mean & S.E & Mean & S.E & Mean & S.E &   \\
         \hline
-        $2.11 \times 10^{-3}$ & $1.16 \times 10^{-1}$ & $5.30 \times 10^{-4}$ & $3.06 \times 10^{-5}$ & $5.90 \times 10^{-5}$ & $9.19 \times 10^{-6}$ & Mu Unknown \\
+        $2.14 \times 10^{-3}$ & $4.76 \times 10^{-5}$ & $8.50 \times 10^{-4}$ & $3.07 \times 10^{-5}$ & $1.19 \times 10^{-6}$ & $1.46 \times 10^{-5}$ & Mu Unknown \\
         \hline
         $2.16 \times 10^{-2}$ & $3.27 \times 10^{-17}$ & $1.57 \times 10^{-11}$ & $4.34 \times 10^{-5}$ & $2.50 \times 10^{-18}$ & $1.69 \times 10^{-13}$ & Frictionless \\
         \hline
@@ -20,7 +20,7 @@
         \hline
         S0 & Type \\
         \hline
-        $-1.84 \times 10^{-2}$ & Mu Unknown \\
+        $3.21 \times 10^{-1}$ & Mu Unknown \\
         \hline
         $3.46 \times 10^{-1}$ & Frictionless \\
         \hline

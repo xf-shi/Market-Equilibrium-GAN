@@ -26,7 +26,7 @@ else:
 
 ## Regimes
 N_AGENT = 5
-COST_POWER = 1.5
+COST_POWER = 2
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
