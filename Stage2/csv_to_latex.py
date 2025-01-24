@@ -9,6 +9,7 @@ def csv_to_latex_table(csv_file, output_file=None, table_name = "10agents_power2
         csv_file (str): Path to the input CSV file.
         output_file (str, optional): Path to save the generated LaTeX code. If None, prints the LaTeX code.
     """
+    ## Table 1
     # Read the CSV file into a DataFrame
     df = pd.read_csv(csv_file)
     df = df[[x for x in df.columns if x != "S0"]]
@@ -88,6 +89,7 @@ def csv_to_latex_table(csv_file, output_file=None, table_name = "10agents_power2
     else:
         print(latex_code_str)
     
+    ## Table 2
     # Read the CSV file into a DataFrame
     df = pd.read_csv(csv_file)
     df = df[["S0", "Type"]]
@@ -134,6 +136,76 @@ def csv_to_latex_table(csv_file, output_file=None, table_name = "10agents_power2
         label = "power-s0-"
     n_agents = int(table_name.split("_")[0].strip("agents"))
     caption += f"{n_agents} Agents $S_0$"
+    label += str(n_agents)
+    latex_code.append(f"    \caption{{{caption}}}")
+    latex_code.append(f"    \label{{tab:{label}}}")
+    latex_code.append(r"\end{table}")
+    
+    # Join the LaTeX code into a single string
+    latex_code_str = "\n".join(latex_code)
+    
+    # Save or print the LaTeX code
+    if output_file:
+        with open(output_file, 'a') as file:
+            file.write(latex_code_str)
+            file.write("\n\n")
+        print(f"LaTeX table code saved to {output_file}")
+    else:
+        print(latex_code_str)
+    
+    ## Table 3
+    # Read the CSV file into a DataFrame
+    df = pd.read_csv(csv_file)
+    df = df[["Type", "Neg Utility Mean", "Clearing Loss Mean", "Stock Loss Mean", "S0"]]
+    df["Type"] = pd.Categorical(df["Type"], ["Ground Truth", "Leading Order", "Frictionless", "Mu Known", "Mu Unknown"])
+    df = df.sort_values("Type")
+    
+    # Start building the LaTeX table
+    latex_code = []
+    latex_code.append(r"\begin{table}[ht]")
+    latex_code.append(r"    \centering")
+    latex_code.append(r"    \begin{tabular}{|c|c|c|c|c|}")
+    latex_code.append(r"        \hline")
+    
+    # Add the table header
+#    header = " & ".join(df.columns) + r" \\"
+#    latex_code.append(f"        {header}")
+    header_top = r"& $\sum_{n\in\mfN} J_n(\dot\varphi_n)$ & $\|\sum_{n\in\mfN}\dot\varphi_n\|^2$ & $\|S_T^\theta - \mfS \|^2$&$S_0$ \\"
+    latex_code.append(f"        {header_top}")
+    latex_code.append(r"        \hline")
+    
+    # Add the table rows
+    for _, row in df.iterrows():
+        row_data = []
+        for value in row:
+            if isinstance(value, (int, float)):
+                # Convert numbers to scientific notation in LaTeX format
+                formatted_value = f"{value:.2e}"
+                try:
+                    base, exponent = formatted_value.split("e")
+                except:
+                    print(value, formatted_value, row)
+                    assert False
+                base = float(base)
+                exponent = int(exponent)
+                latex_value = f"${base:.2f} \\times 10^{{{exponent}}}$"
+                row_data.append(latex_value)
+            else:
+                # Keep non-numerical values as is
+                row_data.append(str(value))
+        latex_code.append("        " + " & ".join(row_data) + r" \\")
+        latex_code.append(r"        \hline")
+    
+    # Close the LaTeX table
+    latex_code.append(r"    \end{tabular}")
+    if "power2" in table_name:
+        caption_type = "Quadratic"
+        label = "quad-"
+    else:
+        caption_type = "3/2-Power"
+        label = "power-"
+    n_agents = int(table_name.split("_")[0].strip("agents"))
+    caption = f"Comparison of Reinforced-GANs Against Ground Truth: {n_agents} Agents with {caption_type} Costs, simulation is done with 1000 sample paths."
     label += str(n_agents)
     latex_code.append(f"    \caption{{{caption}}}")
     latex_code.append(f"    \label{{tab:{label}}}")

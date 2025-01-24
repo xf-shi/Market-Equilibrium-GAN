@@ -28,3 +28,18 @@
     \caption{Power 1.5 Cost 5 Agents $S_0$}
     \label{tab:power-s0-5}
 \end{table}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        & $\sum_{n\in\mfN} J_n(\dot\varphi_n)$ & $\|\sum_{n\in\mfN}\dot\varphi_n\|^2$ & $\|S_T^\theta - \mfS \|^2$&$S_0$ \\
+        \hline
+        Frictionless & $2.16 \times 10^{-2}$ & $1.57 \times 10^{-11}$ & $3.27 \times 10^{-17}$ & $3.46 \times 10^{-1}$ \\
+        \hline
+        Mu Unknown & $2.14 \times 10^{-3}$ & $8.50 \times 10^{-4}$ & $4.76 \times 10^{-5}$ & $3.21 \times 10^{-1}$ \\
+        \hline
+    \end{tabular}
+    \caption{Comparison of Reinforced-GANs Against Ground Truth: 5 Agents with 3/2-Power Costs, simulation is done with 1000 sample paths.}
+    \label{tab:power-5}
+\end{table}

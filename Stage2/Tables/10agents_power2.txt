@@ -32,3 +32,20 @@
     \caption{Quadratic Cost 10 Agents $S_0$}
     \label{tab:quad-s0-10}
 \end{table}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        & $\sum_{n\in\mfN} J_n(\dot\varphi_n)$ & $\|\sum_{n\in\mfN}\dot\varphi_n\|^2$ & $\|S_T^\theta - \mfS \|^2$&$S_0$ \\
+        \hline
+        Ground Truth & $2.08 \times 10^{-1}$ & $2.47 \times 10^{-13}$ & $2.66 \times 10^{-17}$ & $3.61 \times 10^{-1}$ \\
+        \hline
+        Mu Known & $2.09 \times 10^{-1}$ & $2.21 \times 10^{-3}$ & $2.32 \times 10^{-5}$ & $3.58 \times 10^{-1}$ \\
+        \hline
+        Mu Unknown & $2.09 \times 10^{-1}$ & $2.30 \times 10^{-5}$ & $2.73 \times 10^{-7}$ & $3.61 \times 10^{-1}$ \\
+        \hline
+    \end{tabular}
+    \caption{Comparison of Reinforced-GANs Against Ground Truth: 10 Agents with Quadratic Costs, simulation is done with 1000 sample paths.}
+    \label{tab:quad-10}
+\end{table}
