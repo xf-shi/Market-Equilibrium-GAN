@@ -37,7 +37,7 @@ if COST_POWER == 2:
         XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10)
         GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
     elif N_AGENT == 5:
-        XI_LIST = torch.tensor([-3, -2, -2, 3, 4]).float() * (-1)
+        XI_LIST = torch.tensor([-3, -2, -2, 3, 6]).float() * (-1) #torch.tensor([-3, -2, -2, 3, 4]).float() * (-1)
         GAMMA_LIST = torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE)
 else:
     if N_AGENT == 2:

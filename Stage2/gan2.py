@@ -25,8 +25,8 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 5
-COST_POWER = 2
+N_AGENT = 10
+COST_POWER = 1.5
 
 ## Global Constants
 S_VAL = 1 #245714618646 #1#
@@ -44,10 +44,14 @@ else:
         TR = 0.4
         XI_LIST = torch.tensor([3, -3]).float()
         GAMMA_LIST = torch.tensor([1, 2]).float().to(device = DEVICE)
-    else:
+    elif N_AGENT == 5:
         TR = 0.2
         XI_LIST = torch.tensor([-3, -2, -2, 3, 4]).float() * (-1)
         GAMMA_LIST = torch.tensor([1, 1.2, 1.4, 1.6, 1.8]).float().to(device = DEVICE)
+    else:
+        TR = 0.2
+        XI_LIST = torch.tensor([-2.89, -1.49, -1.18, 1.4, 1.91, 2.7, -2.22, -3.15, 2.63, 2.29]).float() * (-10)
+        GAMMA_LIST = torch.tensor([1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9]).float().to(device = DEVICE)
 # TR = 0.2 #0.2 #0.2 for quad cost 2 agents and 0.4 for 1.5 cost 2 agents #20
 T = 100
 TIMESTAMPS = np.linspace(0, TR, T + 1)[:-1]
