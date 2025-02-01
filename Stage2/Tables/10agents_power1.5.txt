@@ -1,0 +1,45 @@
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|c|c|}
+        \hline
+        \multicolumn{2}{c|}{Neg Utility} & \multicolumn{2}{c|}{Clearing Loss} & \multicolumn{2}{c|}{Stock Loss} & Type \\
+        Mean & S.E & Mean & S.E & Mean & S.E &   \\
+        \hline
+        $9.45 \times 10^{-2}$ & $5.63 \times 10^{-6}$ & $9.32 \times 10^{-5}$ & $1.02 \times 10^{-3}$ & $2.18 \times 10^{-7}$ & $1.18 \times 10^{-6}$ & Mu Unknown \\
+        \hline
+        $4.80 \times 10^{-1}$ & $2.96 \times 10^{-17}$ & $2.15 \times 10^{-9}$ & $9.52 \times 10^{-4}$ & $2.48 \times 10^{-18}$ & $4.05 \times 10^{-11}$ & Frictionless \\
+        \hline
+    \end{tabular}
+    \caption{Power 1.5 Cost 10 Agents}
+    \label{tab:power-10}
+\end{table}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{|c|c|}
+        \hline
+        S0 & Type \\
+        \hline
+        $3.65 \times 10^{-1}$ & Mu Unknown \\
+        \hline
+        $3.72 \times 10^{-1}$ & Frictionless \\
+        \hline
+    \end{tabular}
+    \caption{Power 1.5 Cost 10 Agents $S_0$}
+    \label{tab:power-s0-10}
+\end{table}
+
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        & $\sum_{n\in\mfN} J_n(\dot\varphi_n)$ & $\|\sum_{n\in\mfN}\dot\varphi_n\|^2$ & $\|S_T^\theta - \mfS \|^2$&$S_0$ \\
+        \hline
+        Frictionless & $4.80 \times 10^{-1}$ & $2.15 \times 10^{-9}$ & $2.96 \times 10^{-17}$ & $3.72 \times 10^{-1}$ \\
+        \hline
+        Mu Unknown & $9.45 \times 10^{-2}$ & $9.32 \times 10^{-5}$ & $5.63 \times 10^{-6}$ & $3.65 \times 10^{-1}$ \\
+        \hline
+    \end{tabular}
+    \caption{Comparison of Reinforced-GANs Against Ground Truth: 10 Agents with 3/2-Power Costs, simulation is done with 3000 sample paths.}
+    \label{tab:power-10}
+\end{table}

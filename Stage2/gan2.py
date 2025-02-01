@@ -651,7 +651,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
                 if len(arr.shape) == 1:
                     ax.plot(timestamps, arr,label = f"{algo}")
                 else:
-                    ax.plot(timestamps, arr[:, i], label = f"{algo} - Agent {i + 1}")
+                    ax.plot(timestamps, arr[:, i], label = f"{algo}\n - Agent {i + 1}")
             #ax.set_xlabel("T")
             ax.set_xlabel(r"$t$", fontsize = 16)
             ax.xaxis.set_label_coords(0.63, 0.06)
@@ -660,7 +660,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
             #ax.set_title(title2)
             ax.grid()
             box2 = ax.get_position()
-            ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+            ax.legend(loc="center left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+#            ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
 #            ax.legend(loc="lower left")
             plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_agent{i+1}_{ts}.png", bbox_inches='tight')
             plt.close()
@@ -678,7 +679,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
                 ax.plot(timestamps, arr,label = f"{algo}")
             else:
                 for i in range(arr.shape[1]):
-                    ax.plot(timestamps, arr[:, i], label = f"{algo} - Agent {i + 1}")
+                    ax.plot(timestamps, arr[:, i], label = f"{algo}\n - Agent {i + 1}")
         #ax.set_xlabel("T")
         ax.set_xlabel(r"$t$", fontsize = 16)
         ax.xaxis.set_label_coords(0.63, 0.06)
@@ -687,7 +688,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         #ax.set_title(title2)
         ax.grid()
         box2 = ax.get_position()
-        ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+        ax.legend(loc="center left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+#        ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
         # if name in ["phi", "phi_dot"]:
         #     ax.legend(loc="upper left")
         # else:
@@ -1109,8 +1111,8 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
         visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:], mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], 0, drive_dir, "mu", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
         visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:], sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], 0, drive_dir, "sigma", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
         # if utility_power == 1.5:
-        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn_truth[visualize_obs,:,agent] for agent in AGENT_LST], 0, drive_dir, "phi_dot", [f"$\mu$ Unknown - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name} - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
-        visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn_truth[visualize_obs,:-1,agent] for agent in AGENT_LST], 0, drive_dir, "phi", [f"$\mu$ Unknown - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name} - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn_truth[visualize_obs,:,agent] for agent in AGENT_LST], 0, drive_dir, "phi_dot", [f"$\mu$ Unknown\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name}\n - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
+        visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn_truth[visualize_obs,:-1,agent] for agent in AGENT_LST], 0, drive_dir, "phi", [f"$\mu$ Unknown\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name}\n - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
         # else:
         visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "", expand = True)
         visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1], phi_stn[visualize_obs,:-1], phi_stn_truth[visualize_obs,:-1]], 0, drive_dir, "phi", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "", expand = True)

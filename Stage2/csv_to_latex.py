@@ -205,7 +205,7 @@ def csv_to_latex_table(csv_file, output_file=None, table_name = "10agents_power2
         caption_type = "3/2-Power"
         label = "power-"
     n_agents = int(table_name.split("_")[0].strip("agents"))
-    caption = f"Comparison of Reinforced-GANs Against Ground Truth: {n_agents} Agents with {caption_type} Costs, simulation is done with 1000 sample paths."
+    caption = f"Comparison of Reinforced-GANs Against Ground Truth: {n_agents} Agents with {caption_type} Costs, simulation is done with 3000 sample paths."
     label += str(n_agents)
     latex_code.append(f"    \caption{{{caption}}}")
     latex_code.append(f"    \label{{tab:{label}}}")
@@ -223,7 +223,7 @@ def csv_to_latex_table(csv_file, output_file=None, table_name = "10agents_power2
         print(latex_code_str)
 
 # Example usage
-for table_name in ["5agents_power2", "10agents_power2", "2agents_power1.5", "5agents_power1.5"]:
+for table_name in ["5agents_power2", "10agents_power2", "2agents_power1.5", "5agents_power1.5", "10agents_power1.5"]:
     csv_file = f"Tables/{table_name}.csv"  # Replace with your CSV file path
     output_file = f"Tables/{table_name}.txt"  # Replace with desired output file path, or set to None to print
     csv_to_latex_table(csv_file, output_file, table_name = table_name)

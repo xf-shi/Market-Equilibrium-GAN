@@ -40,6 +40,6 @@
         Mu Unknown & $2.14 \times 10^{-3}$ & $8.50 \times 10^{-4}$ & $4.76 \times 10^{-5}$ & $3.21 \times 10^{-1}$ \\
         \hline
     \end{tabular}
-    \caption{Comparison of Reinforced-GANs Against Ground Truth: 5 Agents with 3/2-Power Costs, simulation is done with 1000 sample paths.}
+    \caption{Comparison of Reinforced-GANs Against Ground Truth: 5 Agents with 3/2-Power Costs, simulation is done with 3000 sample paths.}
     \label{tab:power-5}
 \end{table}
