@@ -25,7 +25,7 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 10
+N_AGENT = 2
 COST_POWER = 1.5
 
 ## Global Constants
@@ -392,6 +392,9 @@ class DynamicFactory():
         sigma_st = torch.zeros((self.n_sample, self.T)).to(device = DEVICE)
         stock_st = torch.zeros((self.n_sample, self.T + 1)).to(device = DEVICE)
         phi_bar_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
+        gamma_hat = abs((GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2))
+        gamma = (GAMMA_1 + GAMMA_2) / 2
+        s0 = 1.976 * GAMMA_BAR * gamma_hat * gamma ** (3/7) * ALPHA ** (8/7) * S * LAM ** (4/7) * self.T
 
         if N_AGENT > 2:
             for t in range(self.T + 1):
@@ -423,7 +426,7 @@ class DynamicFactory():
                 mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
                 stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
         target = BETA * TR + ALPHA * self.W_st[:,-1]
-        stock_st = stock_st + (target - stock_st[:,-1]).reshape((self.n_sample, 1))
+        stock_st = stock_st + s0 #(target - stock_st[:,-1]).reshape((self.n_sample, 1))
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def ground_truth(self, F_exact, H_exact):
