@@ -394,7 +394,7 @@ class DynamicFactory():
         phi_bar_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
         gamma_hat = abs((GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2))
         gamma = (GAMMA_1 + GAMMA_2) / 2
-        s0 = 1.976 * GAMMA_BAR * gamma_hat * gamma ** (3/7) * ALPHA ** (8/7) * S * LAM ** (4/7) * self.T
+        s0 = 1.976 * GAMMA_BAR * gamma_hat * gamma ** (3/7) * ALPHA ** (8/7) * S * LAM ** (4/7) * TR
 
         if N_AGENT > 2:
             for t in range(self.T + 1):

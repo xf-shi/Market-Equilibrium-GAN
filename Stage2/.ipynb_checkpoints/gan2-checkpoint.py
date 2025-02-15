@@ -25,7 +25,7 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 10
+N_AGENT = 2
 COST_POWER = 1.5
 
 ## Global Constants
@@ -392,6 +392,9 @@ class DynamicFactory():
         sigma_st = torch.zeros((self.n_sample, self.T)).to(device = DEVICE)
         stock_st = torch.zeros((self.n_sample, self.T + 1)).to(device = DEVICE)
         phi_bar_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
+        gamma_hat = abs((GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2))
+        gamma = (GAMMA_1 + GAMMA_2) / 2
+        s0 = 1.976 * GAMMA_BAR * gamma_hat * gamma ** (3/7) * ALPHA ** (8/7) * S * LAM ** (4/7) * TR
 
         if N_AGENT > 2:
             for t in range(self.T + 1):
@@ -423,7 +426,7 @@ class DynamicFactory():
                 mu_st[:,t] = GAMMA_BAR * S * sigma_st[:,t] ** 2 + 1/2 * (GAMMA_1 - GAMMA_2) * sigma_st[:,t] ** 2 * delta_phi_stn[:,t,0] + 1/2 * XI_LIST[0] * sigma_st[:,t] / ALPHA * (GAMMA_1 - GAMMA_2) * (ALPHA - sigma_st[:,t]) * self.W_st[:,t+1]
                 stock_st[:,t+1] = stock_st[:,t] + mu_st[:,t] * DT + sigma_st[:,t] * self.dW_st[:,t]
         target = BETA * TR + ALPHA * self.W_st[:,-1]
-        stock_st = stock_st + (target - stock_st[:,-1]).reshape((self.n_sample, 1))
+        stock_st = stock_st + s0 #(target - stock_st[:,-1]).reshape((self.n_sample, 1))
         return phi_dot_stn, phi_stn, mu_st, sigma_st, stock_st
     
     def ground_truth(self, F_exact, H_exact):
@@ -651,7 +654,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
                 if len(arr.shape) == 1:
                     ax.plot(timestamps, arr,label = f"{algo}")
                 else:
-                    ax.plot(timestamps, arr[:, i], label = f"{algo} - Agent {i + 1}")
+                    ax.plot(timestamps, arr[:, i], label = f"{algo}\n - Agent {i + 1}")
             #ax.set_xlabel("T")
             ax.set_xlabel(r"$t$", fontsize = 16)
             ax.xaxis.set_label_coords(0.63, 0.06)
@@ -660,7 +663,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
             #ax.set_title(title2)
             ax.grid()
             box2 = ax.get_position()
-            ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+            ax.legend(loc="center left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+#            ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
 #            ax.legend(loc="lower left")
             plt.savefig(f"{drive_dir}/Plots/comp_round={round}_{name}_agent{i+1}_{ts}.png", bbox_inches='tight')
             plt.close()
@@ -678,7 +682,7 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
                 ax.plot(timestamps, arr,label = f"{algo}")
             else:
                 for i in range(arr.shape[1]):
-                    ax.plot(timestamps, arr[:, i], label = f"{algo} - Agent {i + 1}")
+                    ax.plot(timestamps, arr[:, i], label = f"{algo}\n - Agent {i + 1}")
         #ax.set_xlabel("T")
         ax.set_xlabel(r"$t$", fontsize = 16)
         ax.xaxis.set_label_coords(0.63, 0.06)
@@ -687,7 +691,8 @@ def visualize_comparison(timestamps, arr_lst, round, ts, name, algo_lst, comment
         #ax.set_title(title2)
         ax.grid()
         box2 = ax.get_position()
-        ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+        ax.legend(loc="center left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
+#        ax.legend(loc="lower left", bbox_to_anchor=(box2.width*1.3,box2.height*0.5))
         # if name in ["phi", "phi_dot"]:
         #     ax.legend(loc="upper left")
         # else:
@@ -1109,8 +1114,8 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
         visualize_comparison(TIMESTAMPS, [mu_st_nomu[visualize_obs,:], mu_st[visualize_obs,:], mu_st_truth[visualize_obs,:]], 0, drive_dir, "mu", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
         visualize_comparison(TIMESTAMPS, [sigma_st_nomu[visualize_obs,:], sigma_st[visualize_obs,:], sigma_st_truth[visualize_obs,:]], 0, drive_dir, "sigma", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "")
         # if utility_power == 1.5:
-        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn_truth[visualize_obs,:,agent] for agent in AGENT_LST], 0, drive_dir, "phi_dot", [f"$\mu$ Unknown - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name} - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
-        visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn_truth[visualize_obs,:-1,agent] for agent in AGENT_LST], 0, drive_dir, "phi", [f"$\mu$ Unknown - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name} - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
+        visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn[visualize_obs,:,agent] for agent in AGENT_LST] + [phi_dot_stn_truth[visualize_obs,:,agent] for agent in AGENT_LST], 0, drive_dir, "phi_dot", [f"$\mu$ Unknown\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name}\n - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
+        visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn[visualize_obs,:-1,agent] for agent in AGENT_LST] + [phi_stn_truth[visualize_obs,:-1,agent] for agent in AGENT_LST], 0, drive_dir, "phi", [f"$\mu$ Unknown\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"$\mu$ Known\n - Agent {agent + 1}" for agent in AGENT_LST] + [f"{benchmark_name}\n - Agent {agent + 1}" for agent in AGENT_LST], comment = "", expand = False)
         # else:
         visualize_comparison(TIMESTAMPS, [phi_dot_stn_nomu[visualize_obs,:], phi_dot_stn[visualize_obs,:], phi_dot_stn_truth[visualize_obs,:]], 0, drive_dir, "phi_dot", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "", expand = True)
         visualize_comparison(TIMESTAMPS, [phi_stn_nomu[visualize_obs,:-1], phi_stn[visualize_obs,:-1], phi_stn_truth[visualize_obs,:-1]], 0, drive_dir, "phi", ["$\mu$ Unknown", "$\mu$ Known", benchmark_name], comment = "", expand = True)
