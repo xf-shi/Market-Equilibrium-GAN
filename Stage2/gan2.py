@@ -25,7 +25,7 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 2
+N_AGENT = 10
 COST_POWER = 1.5
 
 ## Global Constants
@@ -394,7 +394,8 @@ class DynamicFactory():
         phi_bar_stn = torch.zeros((self.n_sample, self.T + 1, N_AGENT)).to(device = DEVICE)
         gamma_hat = abs((GAMMA_1 - GAMMA_2) / (GAMMA_1 + GAMMA_2))
         gamma = (GAMMA_1 + GAMMA_2) / 2
-        s0 = 1.976 * GAMMA_BAR * gamma_hat * gamma ** (3/7) * ALPHA ** (8/7) * S * LAM ** (4/7) * TR
+        s_0_fricless = (BETA - ALPHA) * TR
+        s0 = s_0_fricless + 1.976 * GAMMA_BAR * gamma_hat * gamma ** (3/7) * ALPHA ** (8/7) * S * LAM ** (4/7) * TR
 
         if N_AGENT > 2:
             for t in range(self.T + 1):
@@ -458,7 +459,7 @@ class DynamicFactory():
         stock_st = torch.zeros((self.n_sample, self.T + 1)).to(device = DEVICE)
         for t in range(T):
             stock_st[:,t+1] = stock_st[:,t] + mu_bar * DT + sigma_bar * self.dW_st[:,t]
-        stock_st = stock_st + (target - stock_st[:,-1]).reshape((self.n_sample, 1))
+        stock_st = stock_st + (BETA - ALPHA) * TR #(target - stock_st[:,-1]).reshape((self.n_sample, 1))
         return stock_st
 
     def frictionless_mu(self):
