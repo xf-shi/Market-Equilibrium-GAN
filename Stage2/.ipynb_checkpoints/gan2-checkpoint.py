@@ -25,7 +25,7 @@ else:
     DEVICE = "cuda"
 
 ## Regimes
-N_AGENT = 10
+N_AGENT = 2
 COST_POWER = 1.5
 
 ## Global Constants
@@ -1072,6 +1072,7 @@ def plot_all_trajectories(gen_hidden_lst, gen_lr, gen_decay, gen_scheduler_step,
         benchmark_name = "Ground Truth"
     else:
         if N_AGENT == 2:
+            visualize_obs = -1
             benchmark_name = "Leading Order"
         else:
             benchmark_name = "Frictionless"
